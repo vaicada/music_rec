@@ -50,16 +50,16 @@ FILE_CONFIGS = {
         "size_mb": 71,
         "description": "FAISS index metadata mappings"
     },
-    # "train_data": {
-    #     "url": "https://drive.google.com/uc?id=YOUR_DATA_FILE_ID",  # train.csv
-    #     "path": "../data/processed/train.csv",
-    #     "size_mb": 964,
-    #     "description": "Song database (441K songs)"
-    # },
+    "train_data": {
+        "url": "https://drive.google.com/uc?id=1nhrUt7fHWTXw2ilR1WhbcgNwh80mpvYR",  # train.csv
+        "path": "../data/processed/train.csv",
+        "size_mb": 964,
+        "description": "Song database (441K songs)"
+    },
     # NOTE: train.csv is OPTIONAL. If missing, app falls back to models/song_metadata.csv (29MB)
     # which is included in the Git repo. This saves ~1GB of download size.
     "audio_stats": {
-        "url": "https://drive.google.com/uc?id=YOUR_STATS_FILE_ID",  # audio_stats.json
+        "url": "https://drive.google.com/uc?id=1n9kSf_sC-ZPUEZYcXYHvDSnXS_pU0Ttz",  # audio_stats.json
         "path": "../models/audio_stats.json",
         "size_mb": 0.001,
         "description": "Audio feature normalization statistics"
