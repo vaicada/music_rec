@@ -1,0 +1,52 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv*/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Dataset files (will be downloaded at runtime)
+dataset/
+data/raw/
+data/processed/*.csv
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Documentation
+*.md
+FULL_PROJECT_REPORT.md
+DEPLOYMENT_GUIDE.md
+DEPLOYMENT_CHECKLIST.md
+
+# Scripts not needed for deployment
+prepare_data.py
+train_improved.py
+build_faiss_index.py
+evaluate_final.py
+interactive_demo.py
+project_implementation_log.txt
+
+# Vercel specific (not needed for Railway)
+vercel.json
+vercel_build.sh
+api/
+
+# Agent files
+.agent/

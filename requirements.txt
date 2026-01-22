@@ -1,0 +1,26 @@
+# =============================================================================
+# Music Recommender - Railway Deployment (Optimized)
+# =============================================================================
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0.post1
+
+# Core ML - Use specific versions to avoid bloat
+torch==2.1.0
+transformers==4.35.0
+
+# FAISS - CPU only
+faiss-cpu==1.7.4
+
+# Data Processing - Pin versions
+pandas==2.1.3
+numpy==1.26.2
+scikit-learn==1.3.2
+
+# Utilities
+tqdm==4.66.1
+gdown==4.7.1
+
+# YouTube Integration
+youtube-search-python==1.6.6

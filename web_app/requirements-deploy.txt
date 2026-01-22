@@ -1,0 +1,2 @@
+# Add gdown to requirements for downloading files from Google Drive
+gdown>=5.1.0

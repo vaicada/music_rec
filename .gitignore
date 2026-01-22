@@ -1,0 +1,93 @@
+# =============================================================================
+# Music Recommender - .gitignore
+# =============================================================================
+
+# ----- Python -----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ----- Virtual Environment -----
+.venv/
+.venv311/
+venv/
+ENV/
+env/
+
+# ----- IDE -----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ----- Jupyter -----
+.ipynb_checkpoints/
+*.ipynb
+
+# =============================================================================
+# LARGE FILES - EXCLUDED TO REDUCE REPO SIZE
+# =============================================================================
+
+# ----- Dataset Files (1-2GB each) -----
+dataset/
+*.json
+!package.json
+!tsconfig.json
+
+# ----- Processed Data (Generated) -----
+data/processed/train.csv
+data/processed/val.csv
+data/processed/test.csv
+data/processed/embeddings/
+
+# ----- Model Files (Large) -----
+models/*.pth
+models/*.bin
+models/*.npy
+models/*.pkl
+models/bert_cache/
+
+# ----- Log Files -----
+*.log
+project_implementation_log.txt
+hybrid_music_engine/project_implementation_log.txt
+
+# =============================================================================
+# FILES TO KEEP (Use git add -f if needed)
+# =============================================================================
+# Keep these files:
+# - models/audio_stats.json (small, config file)
+# - models/metadata_vocab.json (vocabulary)
+# - data/processed/dataset_info.json (metadata)
+
+!models/audio_stats.json
+!models/metadata_vocab.json
+!data/processed/dataset_info.json
+
+# ----- OS Files -----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Temporary Files -----
+*.tmp
+*.temp
+*.bak
