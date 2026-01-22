@@ -94,13 +94,13 @@ except ImportError:
 from hybrid_music_engine import get_config
 from hybrid_music_engine.inference import MusicRecommendationEngine
 
-# Try to import youtubesearchpython, provide fallback if not available
+# Try to import yt_dlp, provide fallback if not available
 try:
-    from youtubesearchpython import VideosSearch
+    import yt_dlp
     YOUTUBE_AVAILABLE = True
 except ImportError:
     YOUTUBE_AVAILABLE = False
-    print("[WARNING] youtube-search-python not installed. YouTube features disabled.")
+    print("[WARNING] yt-dlp not installed. YouTube features disabled.")
 
 
 # =============================================================================
@@ -321,31 +321,42 @@ async def get_youtube_video(
         )
     
     search_query = f"{song} {artist} official audio"
-    
+
     try:
-        # VideosSearch is synchronous, run in thread to avoid blocking
-        def do_search():
-            videos_search = VideosSearch(search_query, limit=1)
-            return videos_search.result()
+        # yt-dlp search options
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'noplaylist': True,
+            'quiet': True,
+            'default_search': 'ytsearch1',
+            'no_warnings': True,
+        }
         
+        def do_search():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # search_query is passed directly, yt-dlp handles "ytsearch1:" prefix if default_search is set
+                # or we can be explicit: f"ytsearch1:{search_query}"
+                info = ydl.extract_info(search_query, download=False)
+                return info
+        
+        # Run in thread pool to avoid blocking
         result = await asyncio.to_thread(do_search)
         
-        videos = result.get('result', [])
-        if videos:
-            video = videos[0]
-            video_id = video.get('id', '')
-            thumbnails = video.get('thumbnails', [])
-            thumbnail = thumbnails[-1].get('url', '') if thumbnails else ''
+        if 'entries' in result and result['entries']:
+            video = result['entries'][0]
+            video_id = video.get('id')
+            thumbnail = video.get('thumbnail', '')
             
             return YouTubeResult(
                 video_id=video_id,
                 embed_url=f"https://www.youtube.com/embed/{video_id}",
                 thumbnail=thumbnail
             )
-        
+            
         raise HTTPException(status_code=404, detail="No YouTube video found")
         
     except Exception as e:
+        print(f"YouTube search error: {e}")
         raise HTTPException(status_code=500, detail=f"YouTube search failed: {str(e)}")
 
 
