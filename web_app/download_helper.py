@@ -104,7 +104,7 @@ def download_file(url: str, output_path: Path, description: str = "file") -> boo
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Download using gdown
-        gdown.download(url, str(output_path), quiet=False)
+        gdown.download(url, str(output_path), quiet=False, fuzzy=True)
         
         if output_path.exists():
             size_mb = output_path.stat().st_size / (1024 * 1024)
