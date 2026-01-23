@@ -259,8 +259,18 @@ async function playSong(song, artist) {
         // Check if this is fallback mode (no video_id means it's a search URL)
         if (!data.video_id || data.video_id === null) {
             // Fallback mode: Open YouTube search in new tab
-            closeModal(); // Close the modal first
-            window.open(data.embed_url, '_blank'); // Open search in new tab
+            // Using anchor element instead of window.open() to avoid pop-up blockers
+            const link = document.createElement('a');
+            link.href = data.embed_url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+
+            // Add to DOM temporarily (required for some browsers)
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            closeModal(); // Close the modal after opening link
 
             // Show informative message
             const message = data.message || 'Opening YouTube search in new tab...';
