@@ -95,7 +95,7 @@ def download_file(url: str, output_path: Path, description: str = "file") -> boo
     """
     try:
         print(f"\n{'='*60}")
-        print(f"📥 Downloading {description}...")
+        print(f"[DOWNLOAD] Downloading {description}...")
         print(f"   Target: {output_path}")
         print(f"   URL: {url[:50]}...")
         print(f"{'='*60}")
@@ -108,14 +108,14 @@ def download_file(url: str, output_path: Path, description: str = "file") -> boo
         
         if output_path.exists():
             size_mb = output_path.stat().st_size / (1024 * 1024)
-            print(f"✅ Successfully downloaded {description} ({size_mb:.1f} MB)")
+            print(f"[OK] Successfully downloaded {description} ({size_mb:.1f} MB)")
             return True
         else:
-            print(f"❌ Download failed: File not created")
+            print(f"[ERROR] Download failed: File not created")
             return False
             
     except Exception as e:
-        print(f"❌ Error downloading {description}: {e}")
+        print(f"[ERROR] Error downloading {description}: {e}")
         return False
 
 
@@ -128,7 +128,7 @@ def check_and_download_all() -> bool:
         False if any required file is missing and could not be downloaded.
     """
     print("\n" + "="*60)
-    print("🔍 CHECKING REQUIRED FILES")
+    print("[CHECK] CHECKING REQUIRED FILES")
     print("="*60)
     
     all_success = True
@@ -140,23 +140,23 @@ def check_and_download_all() -> bool:
         
         if file_path.exists():
             size_mb = file_path.stat().st_size / (1024 * 1024)
-            print(f"✅ {config['description']}: Found ({size_mb:.1f} MB)")
+            print(f"[OK] {config['description']}: Found ({size_mb:.1f} MB)")
         else:
-            print(f"❌ {config['description']}: Missing")
+            print(f"[MISS] {config['description']}: Missing")
             files_to_download.append((file_key, config))
     
     # Download missing files
     if files_to_download:
         total_size = sum(cfg["size_mb"] for _, cfg in files_to_download)
-        print(f"\n⚠️  Need to download {len(files_to_download)} files (~{total_size:.0f} MB total)")
-        print("⏱️  This may take 5-15 minutes depending on your internet speed...")
+        print(f"\n[WARN] Need to download {len(files_to_download)} files (~{total_size:.0f} MB total)")
+        print("[INFO] This may take 5-15 minutes depending on your internet speed...")
         
         for file_key, config in files_to_download:
             file_path = get_absolute_path(config["path"])
             
             # Check if URL is configured
             if "YOUR_" in config["url"]:
-                print(f"\n❌ ERROR: {config['description']}")
+                print(f"\n[ERROR] ERROR: {config['description']}")
                 print(f"   Please update the Google Drive URL in download_helper.py")
                 print(f"   File key: {file_key}")
                 all_success = False
@@ -172,7 +172,7 @@ def check_and_download_all() -> bool:
             if not success:
                 all_success = False
     else:
-        print("\n✅ All required files are present!")
+        print("\n[OK] All required files are present!")
     
     return all_success
 
@@ -188,7 +188,7 @@ def ensure_files_ready() -> None:
     
     if not success:
         print("\n" + "="*60)
-        print("❌ FATAL ERROR: Required files are missing")
+        print("[FATAL] FATAL ERROR: Required files are missing")
         print("="*60)
         print("\nPlease follow these steps:")
         print("1. Upload the following files to Google Drive:")
@@ -205,7 +205,7 @@ def ensure_files_ready() -> None:
         sys.exit(1)
     
     print("\n" + "="*60)
-    print("✅ ALL FILES READY - Application can start")
+    print("[OK] ALL FILES READY - Application can start")
     print("="*60)
 
 
