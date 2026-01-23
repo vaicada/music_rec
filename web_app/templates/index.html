@@ -1,18 +1,21 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Music Recommender - Find Your Perfect Song</title>
-    <meta name="description" content="AI-powered music recommendation system. Find similar songs, discover music by mood or context.">
+    <meta name="description"
+        content="AI-powered music recommendation system. Find similar songs, discover music by mood or context.">
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
     <!-- Background gradient overlay -->
     <div class="bg-gradient"></div>
-    
+
     <!-- Main Container -->
     <div class="container">
         <!-- Header -->
@@ -32,26 +35,17 @@
         <section class="hero">
             <h1 class="hero-title">Discover Your Next<br><span class="gradient-text">Favorite Song</span></h1>
             <p class="hero-subtitle">AI-powered music recommendations based on your taste</p>
-            
+
             <!-- Search Section -->
             <div class="search-container" id="search-mode">
                 <div class="search-box">
-                    <input 
-                        type="text" 
-                        id="searchInput" 
-                        class="search-input" 
-                        placeholder="Enter a song name..."
-                        autocomplete="off"
-                    >
-                    <input 
-                        type="text" 
-                        id="artistInput" 
-                        class="artist-input" 
-                        placeholder="Artist (optional)"
-                        autocomplete="off"
-                    >
+                    <input type="text" id="searchInput" class="search-input" placeholder="Enter a song name..."
+                        autocomplete="off">
+                    <input type="text" id="artistInput" class="artist-input" placeholder="Artist (optional)"
+                        autocomplete="off">
                     <button class="search-btn" id="searchBtn" onclick="handleSearch()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <circle cx="11" cy="11" r="8"></circle>
                             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
@@ -153,6 +147,7 @@
         <p>Powered by Hybrid Music Recommendation Engine</p>
     </footer>
 
-    <script src="/static/js/main.js"></script>
+    <script src="/static/js/main.js?v=2"></script>
 </body>
+
 </html>
