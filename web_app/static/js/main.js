@@ -256,6 +256,19 @@ async function playSong(song, artist) {
             throw new Error(data.detail || 'Could not find video');
         }
 
+        // Check if this is fallback mode (no video_id means it's a search URL)
+        if (!data.video_id || data.video_id === null) {
+            // Fallback mode: Open YouTube search in new tab
+            closeModal(); // Close the modal first
+            window.open(data.embed_url, '_blank'); // Open search in new tab
+
+            // Show informative message
+            const message = data.message || 'Opening YouTube search in new tab...';
+            showToast(message, 'info');
+            return;
+        }
+
+        // Normal mode: Embed video iframe
         elements.youtubePlayer().innerHTML = `
             <iframe 
                 src="${data.embed_url}?autoplay=1" 
