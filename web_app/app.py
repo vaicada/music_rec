@@ -118,9 +118,12 @@ class SongResult(BaseModel):
 
 class YouTubeResult(BaseModel):
     """Response model for YouTube video."""
-    video_id: str
+    success: bool = True
+    video_id: Optional[str] = None
     embed_url: str
+    title: str = ""
     thumbnail: Optional[str] = None
+    message: Optional[str] = None
 
 
 class SearchResponse(BaseModel):
@@ -313,11 +316,18 @@ async def get_youtube_video(
     """
     Get YouTube embed URL for a song.
     Searches YouTube for the official audio/video.
+    Falls back to YouTube search URL if server-side search is unavailable.
     """
     if not YOUTUBE_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="YouTube search not available. Install: pip install youtube-search-python"
+        # Fallback: return YouTube search URL
+        query = f"{song} {artist}".strip()
+        search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+        return YouTubeResult(
+            success=True,
+            video_id=None,
+            embed_url=search_url,
+            title=f"Search: {query}",
+            message="yt-dlp not installed. Click to search on YouTube."
         )
     
     search_query = f"{song} {artist} official audio"
@@ -330,6 +340,7 @@ async def get_youtube_video(
             'quiet': True,
             'default_search': 'ytsearch1',
             'no_warnings': True,
+            'socket_timeout': 10,  # 10 second timeout
         }
         
         def do_search():
@@ -345,19 +356,41 @@ async def get_youtube_video(
         if 'entries' in result and result['entries']:
             video = result['entries'][0]
             video_id = video.get('id')
+            video_title = video.get('title', f"{song} - {artist}")
             thumbnail = video.get('thumbnail', '')
             
             return YouTubeResult(
+                success=True,
                 video_id=video_id,
                 embed_url=f"https://www.youtube.com/embed/{video_id}",
+                title=video_title,
                 thumbnail=thumbnail
             )
             
-        raise HTTPException(status_code=404, detail="No YouTube video found")
+        # No results found, fallback to search URL
+        query = f"{song} {artist}".strip()
+        search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+        return YouTubeResult(
+            success=True,
+            video_id=None,
+            embed_url=search_url,
+            title=f"Search: {query}",
+            message="No exact match found. Click to search on YouTube."
+        )
         
     except Exception as e:
-        print(f"YouTube search error: {e}")
-        raise HTTPException(status_code=500, detail=f"YouTube search failed: {str(e)}")
+        # Graceful fallback on any error (network, DNS, timeout, etc.)
+        print(f"[INFO] YouTube API unavailable, using search fallback: {e}")
+        query = f"{song} {artist}".strip()
+        search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+        
+        return YouTubeResult(
+            success=True,
+            video_id=None,
+            embed_url=search_url,
+            title=f"Search: {query}",
+            message="Server-side YouTube search unavailable. Click to search on YouTube."
+        )
 
 
 # =============================================================================
