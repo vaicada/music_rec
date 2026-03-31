@@ -20,7 +20,8 @@
 7. [Hệ Thống FAISS](#7-hệ-thống-faiss)
 8. [Ứng Dụng Web](#8-ứng-dụng-web)
 9. [Hướng Dẫn Sử Dụng](#9-hướng-dẫn-sử-dụng)
-10. [Kết Luận](#10-kết-luận)
+10. [Triển khai trên Hugging Face](#10-triển-khai-trên-hugging-face)
+11. [Kết Luận](#11-kết-luận)
 
 ---
 
@@ -158,7 +159,7 @@ Xây dựng hệ thống gợi ý nhạc thông minh dựa trên:
 | 900k Dataset | ✅✅✅ | ✅✅ | ✅✅ | ✅✅ | 900K |
 | BERT 500K | ✅✅✅ | ✅✅ | ✅✅✅ | ✅✅ | 551K |
 | Spotify CSV | ✅✅✅ | ✅✅ | ✅✅✅ | ✅✅ | 551K |
-| Tracks Features | ❌ | ✅✅✅ | ✅✅ | ❌ | 1.2M |
+| Tracks Features | N/A | Yes | Yes | N/A | 1.2M |
 
 ## 2.4 Khuyến Nghị Sử Dụng
 
@@ -198,7 +199,7 @@ pip install --pre torch torchvision --index-url https://download.pytorch.org/whl
 PyTorch: 2.11.0.dev20260110+cu128
 CUDA: 12.8
 GPU: NVIDIA GeForce RTX 5060 Ti
-GPU tensor test: Success ✓
+GPU tensor test: Success [OK]
 ```
 
 ## 3.2 Các Bước Xử Lý Dữ Liệu
@@ -246,13 +247,13 @@ def normalize_to_spotify_api(df):
 **Kết quả sau chuẩn hóa:**
 
 ```
-energy:           0.000 - 1.000 (mean=0.627) ✓
-danceability:     0.060 - 0.990 (mean=0.592) ✓
-valence:          0.000 - 1.000 (mean=0.477) ✓
-acousticness:     0.000 - 1.000 (mean=0.257) ✓
-instrumentalness: 0.000 - 1.000 (mean=0.072) ✓
-speechiness:      0.020 - 0.970 (mean=0.117) ✓
-liveness:         0.010 - 1.000 (mean=0.197) ✓
+energy:           0.000 - 1.000 (mean=0.627) [OK]
+danceability:     0.060 - 0.990 (mean=0.592) [OK]
+valence:          0.000 - 1.000 (mean=0.477) [OK]
+acousticness:     0.000 - 1.000 (mean=0.257) [OK]
+instrumentalness: 0.000 - 1.000 (mean=0.072) [OK]
+speechiness:      0.020 - 0.970 (mean=0.117) [OK]
+liveness:         0.010 - 1.000 (mean=0.197) [OK]
 ```
 
 ### Bước 4: Chia Dữ Liệu (Train/Val/Test Split)
@@ -291,6 +292,54 @@ liveness:         0.010 - 1.000 (mean=0.197) ✓
 | `train_embeddings.npy` | 1,292.4 MB | BERT embeddings cho train (441156 × 768) |
 | `val_embeddings.npy` | 161.6 MB | BERT embeddings cho val (55143 × 768) |
 | `test_embeddings.npy` | 161.6 MB | BERT embeddings cho test (55144 × 768) |
+
+## 3.4 Trực Quan Hóa Dữ Liệu (Data Visualization)
+
+Phần này tổng hợp các kết quả trực quan hóa phân tích tập dữ liệu có nhãn (`spotify_dataset.csv`), tập dữ liệu gốc (`tracks_features.csv`) và không gian học máy tương ứng của hai mô hình.
+
+### 3.4.1 Tổng Quan Các Bộ Dữ Liệu Thực Nghiệm
+
+**Dataset 1: `spotify_dataset.csv` (Model 1 Input)**
+- **Kích thước:** 496,278 tracks (tập train + val).
+- **Phân loại:** 6 nhãn cảm xúc chính (Joy, Sadness, Anger, Fear, Love, Surprise).
+- **Vấn đề:** Mất cân bằng lớp (Class Imbalance) cực kỳ nghiêm trọng khi Top 3 cảm xúc chiếm tới 88.8%. Dữ liệu cấu trúc có giám sát (Supervised) để luyện mô hình Hybrid.
+
+**Dataset 2: `tracks_features.csv` (Model 2 Input)**
+- **Kích thước:** 1,204,025 tracks.
+- **Biến đổi:** Nhạc phát hành từ năm 1921 đến 2021, đóng gói dưới dạng 9 features âm thanh thô.
+- **Tính chất:** File dữ liệu hoàn toàn không nhãn (Unsupervised) cho Audio Autoencoder.
+
+### 3.4.2 Phân Tích Dataset `spotify_dataset.csv` (Model 1 Input)
+
+#### ⭐ DNA Âm Thanh Theo Cảm Xúc (Radar Chart)
+- **Cơ chế:** Radar Chart đa chiều thể hiện giá trị trung bình 7 audio features trên 6 nhóm cảm xúc. Đã giải quyết được việc định hướng thuộc tính nào mạnh nhất ở dòng cảm xúc nào.
+- **Insights:** Thể hiện "chữ ký âm thanh" sinh động, ví dụ *Joy* dẫn đầu về **Danceability**, trong khi *Anger* lại vượt trội ở **Energy** và **Speechiness** do lẫn nhiều rap. Sự phân bua mờ nhạt giữa các ranh giới không gian khẳng định phải sử dụng xử lý Natural Language (NLP) từ Lyrics mới có thể định hình kết quả đúng thay vì chỉ dùng âm thanh.
+
+#### ⭐ Tổng Quan Bộ Dữ Liệu (Dashboard 2x2)
+Bảng điều khiển kết hợp 4 panel chuyên sâu về mặt thống kê: 
+1. **Mất cân bằng lớp (Class Imbalance):** Phần lớn nghiêng về *Joy, Sadness, Anger*, còn lại rất ít.
+2. **Audio Features Boxplot:** Nắm toàn cảnh phân phối từ Min đến Max của Daceability, Energy,...
+3. **Phân phối Tempo:** Tập trung hình chuông rất chuẩn quanh 120 BPM.
+4. **Mối quan hệ Valence - Energy:** *Love* bất ngờ lại nằm đơn độc như một mảng nhiễu, trong khi các nhãn còn lại tụ cụm tương đồng trung tính.
+
+### 3.4.3 Phân Tích Dataset `tracks_features.csv` (Model 2 Input)
+
+#### ⭐ Sự Tiến Hóa Âm Thanh Qua Các Thập Kỷ (Radar Chart by Decade)
+Radar Chart theo dõi sự thay đổi dòng nhạc 7 thập kỷ qua:
+- **Biến thiên lịch sử:** **Acousticness** (tính mộc) đâm dốc mạnh qua từng năm, đại diện cho xu hướng rời bỏ nhạc cụ và chuyển dần sang sản xuất tự động. Tương quan với nó, **Energy** và **Speechiness** theo chiều đi lên mạnh từ 1990+.
+
+#### ⭐ Ma Trận Mật Độ Phân Phối (Hexbin Density Grid)
+- **Kỹ thuật xử lý Big Data:** Trực quan hóa 1.2 triệu điểm mẫu sẽ khiến các Scatter Plot đen đặc lại vì lỗi overplotting. Vì thế sử dụng lưới lục giác log-scale (Hexbin) thể hiện "vùng tụ tập".
+- **Insights:** Chỉ ra phân cực bimodal rõ ràng ở Acousticness. Tương quan mạnh nhất thuộc về cặp Danceability và Valence - Nhạc càng dễ khiêu vũ thì càng mang ý nghĩa tích cực!
+
+### 3.4.4 Trực Quan Hóa Không Gian Nhúng Mô Hình (Embeddings Space)
+
+Để chứng minh luận điểm hệ thống hoạt động chính xác (Giải thích được - Explainability AI):
+- **Model 1 (Hybrid) 3D FAISS / UMAP:** Không gian tương tác biểu đồ Scatter Plot 3D phân mảnh từng hòn đảo của các cụm Happy, Sad, Party rõ nét. Do kết hợp cả Lyrics NLP mạnh mẽ.
+- **Model 2 (Audio Autoencoder 1.2M) 2D Gradient:** Mô hình tự tạo thành một Spectrum âm thanh mịn màng chuyển tiếp tự nhiên từ Acoustic tĩnh mịch sang EDM hỗn mang cường độ cao, không cần tới Nhãn phân loại con người - Khẳng định Model 2 Unsupervised hoạt động cực kì hiệu quả trên 1.2 triệu bài hát.
+
+### 3.4.5 Kết Luận Dữ Liệu
+Vượt qua sự phức tạp khi mang trên mình **2 bộ dữ liệu khổng lồ khác nhau (tổng 1.7 triệu mẫu)**, những biểu đồ đã chọn lọc (Radar, Dashboard 4-panel, Hexbin Density...) giúp minh bạch hóa hoàn toàn cấu trúc không gian Vector và "chất liệu âm nhạc" nền tảng, tạo đòn bẩy vững chắc để hệ thống Recommend System gợi ý đạt hiệu năng cực cao.
 
 ---
 
@@ -415,7 +464,7 @@ Total_Loss = 0.7 * emotion_loss + 0.3 * genre_loss
 |-------------|---------|------------|---------|
 | **Contrastive** | Embeddings tốt cho similarity | Cần batch size cực lớn (>2048), không ổn định | NaN Loss |
 | **Triplet Loss** | Học trực tiếp similarity | Khó mining hard negatives | 38% |
-| **Classification** | Ổn định, supervised signal rõ ràng | Phụ thuộc chất lượng labels | **57%** ✓ |
+| **Classification** | Ổn định, supervised signal rõ ràng | Phụ thuộc chất lượng labels | **57%** [OK] |
 
 ---
 
@@ -542,7 +591,22 @@ SEARCH PHASE (Online - mỗi request):
 | Fear | Fear, Sadness, Anger |
 | Surprise | Surprise, Joy |
 
+## 7.7 Cơ Chế Tìm Kiếm Bài Hát Của Model 2 (Audio-Only)
+
+Mặc dù `Model 2` vốn dĩ chỉ xử lý các thông số âm thanh, tính năng tiềm kiếm bài hát bằng Name/Text lại phải sử dụng lớp `CLIPAudioBridge`. Dưới đây là phân tích luồng xử lý và lý do đằng sau kiến trúc này:
+
+- **Bản chất của Model 2**: Model 2 (Audio-Only) là một mạng Neural Network thu gọn chỉ đóng vai trò biến đổi 9 con số đặc trưng âm thanh đầu vào thành 1 vector 32 chiều (embeddings). Bản thân Model 2 không "hiểu" ngôn ngữ con người (không biết Text), cũng không tự định danh lưu trữ bài hát và không nhận diện bài hát nào giống bài hát nào.
+- **Tại sao lại dùng `CLIP Bridge`?**: Việc truy vấn `Model 2` qua class mang tên "CLIP" hoàn toàn **không dính dáng tới xử lý ảnh CLIP**. Sở dĩ mượn class `CLIPAudioBridge` là vì module này đã khởi tạo kết nối (Initialize) tới toàn bộ **Database bài hát (song mappings)**, **những trọng số (weights) của Model 2** và bộ tìm kiếm **FAISS Index 2**. 
+- **Cách Backend tìm kiếm**: Khi người dùng gõ tìm bài hát bằng tên (với lựa chọn Model 2), Backend sẽ yêu cầu hàm tìm kiếm bên trong module này (`recommend_from_song`) thực hiện 4 bước xử lý:
+    1. Đọc tên Text vừa nhập, tra cứu ID bài hát gốc nằm ở đâu trong Database.
+    2. Dùng ID truy cập trực tiếp FAISS để trích xuất Vector biểu diễn âm thanh của nó.
+    3. Thực thi truy vấn các Vector biểu diễn có khoảng cách hình học gần nhất theo Index của hệ thống.
+    4. Mapping ngược vector về tên và nghệ sĩ rồi trả kết quả về Frontend.
+
+Tóm lại, `CLIPAudioBridge` chỉ đóng vai trò "kho lưu trữ tài nguyên" chứa FAISS + Database cho Audio-Only model, giúp không phải tải lại các models vào RAM trong lúc server chạy thực thi tính năng Tìm kiếm văn bản cơ bản.
+
 ---
+
 
 # 8. ỨNG DỤNG WEB
 
@@ -1177,7 +1241,227 @@ result = await asyncio.to_thread(
 
 ---
 
-# 9. HƯỚNG DẪN SỬ DỤNG
+# 9. GỢI Ý NHẠC TỪ HÌNH ẢNH & SỰ ĐA DẠNG MÔ HÌNH (Image-to-Music & Model Diversity)
+
+## 9.1 Tổng Quan: Sự Đa Dạng Trong Gợi Ý
+
+Hệ thống cung cấp hai mô hình hoàn toàn độc lập (Model 1 và Model 2) để đáp ứng các nhu cầu gợi ý khác nhau, đồng thời hỗ trợ cả hai phương thức đầu vào: gõ tên bài hát (Text Search) và tải lên bức ảnh (Image Search).
+
+*   **Model 1 (Hybrid Model):** Gợi ý dựa trên sự phân tích **Ngữ nghĩa (Lyrics - BERT)** kết hợp với Âm thanh. Model này ưu tiên tìm các bài hát có "nội dung" và "cảm xúc" tương đồng.
+*   **Model 2 (Audio-Only Autoencoder):** Gợi ý dựa hoàn toàn vào **Đặc trưng vật lý của Âm thanh (Audio Features)**. Model này tìm kiếm các bài hát có "Vibe", "Nhịp điệu" hoặc "Cấu trúc âm thanh" tương đồng với dữ liệu biểu diễn khổng lồ 1.2 triệu bài hát.
+
+**Điểm mạnh của kiến trúc kép:** Dù người dùng tìm kiếm bằng cách gõ tên bài hát hay bằng một bức ảnh, họ đều có quyền chọn Model 1 hoặc Model 2. Điều này cung cấp 2 "khẩu vị" âm nhạc khác biệt: một bên chú trọng ý nghĩa lời ca, một bên chú trọng năng lượng và nhịp điệu (cực kỳ tốt cho nhạc quốc tế, nhạc không lời, EDM).
+
+Để thực hiện Gợi ý bằng Hình ảnh trên Model 2 (vốn chỉ nhận thông số âm thanh) mà không cần mạng Neural đa phương thức (Multimodal) khổng lồ, hệ thống sử dụng kiến trúc **Bridge (Cầu nối)**.
+
+## 9.2 Kiến Trúc Hệ Thống (Model 2: Audio Autoencoder Bridge)
+
+Kiến trúc Model 2 được thiết kế theo hướng học không giám sát (Unsupervised Learning) tập trung hoàn toàn vào đặc trưng âm thanh thuần túy, loại bỏ sự phụ thuộc vào các nhãn cảm xúc chủ quan. Khi nhận đầu vào là hình ảnh, CLIP sẽ đóng vai trò tiền xử lý:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       MULTI-INPUT RECOMMENDATION PIPELINE                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  [INPUT A: IMAGE]                   │       [INPUT B: SONG NAME/TEXT]       │
+│          │                          │                   │                   │
+│  ┌───────▼───────┐                  │           ┌───────▼───────┐           │
+│  │   CLIP Model  │                  │           │ Text Search   │           │
+│  │ (Vision/Text) │                  │           │   Database    │           │
+│  └───────┬───────┘                  │           └───────┬───────┘           │
+│          │ (Label: "Happy", etc.)   │                   │ (Target Song)     │
+│  ┌───────▼───────┐                  │                   │                   │
+│  │ CLIP Audio    │                  │                   │                   │
+│  │   Bridge      │                  │                   │                   │
+│  └───────┬───────┘                  │                   │                   │
+│          │ (Vector 9D: Energy=0.75) │                   │ (Raw 9D Audio)    │
+│          └──────────────────────────┴───────────────────┘                   │
+│                                     │                                       │
+│                             ┌───────▼───────┐                               │
+│                             │ Audio Model 2 │(Autoencoder Bottleneck)       │
+│                             │  (Encoder)    │                               │
+│                             └───────┬───────┘                               │
+│                                     │ (Latent Vector 32D)                   │
+│                                     │                                       │
+│                             ┌───────▼───────┐                               │
+│                             │  FAISS Index  │                               │
+│                             │ (1.2M songs)  │                               │
+│                             └───────┬───────┘                               │
+│                                     │                                       │
+│                           [Top-K Similar Songs]                             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## 9.3 Quy Trình Thực Hiện & Logic Hoạt Động
+
+Quá trình chia thành 2 giai đoạn: **Offline (Chuẩn bị hệ thống)** và **Online (Khi người dùng thực hiện yêu cầu)**.
+
+### 9.3.1 Giai Đoạn Offline (Xây dựng Model 2 & Index)
+
+Thay vì dùng Model Phân loại (Classification) báo cáo tỷ lệ phần trăm các cảm xúc (có sự sai lệch và giới hạn do dữ liệu gán nhãn chủ quan), Model 2 được cải tiến thành một **Autoencoder**:
+
+1. **Chuẩn bị dữ liệu (Data Preparation):**
+   - Đọc 1.2 triệu dòng từ tập dataset thô `tracks_features.csv`.
+   - Lọc và trích xuất đúng 9 thông số vật lý của âm thanh: `energy`, `danceability`, `valence`, `tempo`, `acousticness`, `instrumentalness`, `speechiness`, `liveness`, `key`.
+   - Chuẩn hoá toàn bộ các thông số (Normalize Z-score cho tempo, Scale 0-1 cho biểu diễn phân loại).
+
+2. **Huấn Luyện (Autoencoder Training):**
+   - **Encoder:** Nén vector 9 chiều (thông số âm thanh) vào một không gian ẩn (Latent space) 32 chiều.
+   - **Decoder:** Giải nén từ 32 chiều trở lại 9 chiều sao cho giống bản gốc nhất.
+   - **Loss function:** Thay vì CrossEntropy, mô hình dùng **MSE (Mean Squared Error)** để tối ưu hoá sao cho độ lệch sát với vật lý âm thanh nhất. Quá trình này hoàn toàn Unsupervised, tự học từ 1.2 triệu bài mà không cần label.
+
+3. **Lưu trữ Index (FAISS Indexing):**
+   - Cắt bỏ phần Decoder đi. Chỉ giữ phần Encoder để tạo ra các Embeddings (Vector đại diện).
+   - Truyền toàn bộ 1.2 triệu track âm thanh qua Encoder để lấy 1.2 triệu vector 32 chiều.
+   - Đưa tất cả vector 32 chiều này vào cơ sở dữ liệu FAISS `IndexFlatIP`. Lúc này hệ thống sẵn sàng tìm kiếm siêu tốc.
+
+### 9.3.2 Giai Đoạn Online (Inference / Recommending)
+
+Khi user upload một hình ảnh, luồng hoạt động diễn ra theo các bước cực kỳ logic để "phiên dịch" thị giác thành thính giác:
+
+1. **Computer Vision (CLIP):**
+   - Ảnh truyền qua mô hình [OpenAI CLIP](https://huggingface.co/openai/clip-vit-base-patch32).
+   - CLIP thực hiện Zero-shot Classification để phân loại bức ảnh vào một trong các nhãn cài đặt sẵn (VD: `Happy`, `Sad`, `Party`, `Relax`, `Workout`, `Driving`, `Calm`).
+   - CLIP chỉ xuất ra chữ (Label Text), không hề biết gì về âm thanh.
+
+2. **The "Bridge" (Cầu nối):**
+   - Module `CLIPAudioBridge` (`clip_audio_bridge.py`) nhận label text.
+   - Dựa vào từ điển quy chuẩn (`AUDIO_PROFILES`) do con người định nghĩa, module này nội suy ra một **Vector 9 chiều mong muốn**.
+     - *Ví dụ:* Nếu CLIP nhãn bức ảnh là `"Relax"`, Bridge sẽ xuất ra một vector quy định: `{ energy: 0.18, valence: 0.60, tempo: 84.0, acousticness: 0.78, ... }`
+   - Nghĩa là bức ảnh đã được "Dịch" thành các thông số kỹ thuật âm nhạc!
+
+3. **Search & Retrieve:**
+   - Vector dự định trên sẽ đi qua Encoder của Model 2 để trở thành vector 32 chiều (Query Vector).
+   - FAISS Search Query Vector này trong cơ sở 1.2 triệu bài hát.
+   - Result: FAISS nhặt ra và trả về n bài hát có profile âm thanh gần giống với yêu cầu "Relax" kia nhất. Từ mặt định lượng vật lý, những bài hát này gần như chắc chắn sẽ đem lại cảm giác y như bức ảnh.
+
+## 9.4 So Sánh Sự Lựa Chọn Model 1 & Model 2
+
+| Tiêu Chí | Model 1 (Hybrid Text/Audio) | Model 2 (Pure Audio Autoencoder) |
+|----------|-----------------------------|----------------------------------|
+| **Kích thước Dataset**| Tối ưu cho `spotify_dataset.csv` (~550K bài) | Mở rộng cho `tracks_features.csv` (1.2 Triệu bài) |
+| **Logic Gợi ý Bài hát (By Text)**| Tìm bài hát có cùng nội dung lời ca và cung bậc cảm xúc | Tìm các bài có cùng cường độ nhịp phách, giai điệu, nhạc cụ (Vibe) |
+| **Logic Gợi ý Hình ảnh (By Image)**| Translate hình ảnh -> Cảm xúc nội dung -> FAISS | Trích xuất Label Hình Ảnh -> Audio Profile (Bridge) -> FAISS |
+| **Bản chất Học máy** | Supervised Learning (Loss: CrossEntropy phân loại) | Unsupervised Learning (Loss: MSE phục hồi hình thái âm thanh) |
+| **Use-case tốt nhất** | Tìm bài hát có ý nghĩa tương đương bài gốc. | Tìm nhạc không lời, EDM, hoặc những bài hợp để chạy bộ/chill bất kể ý nghĩa lời hát. |
+
+Tính năng này chứng minh: Không có một Model nào là hoàn hảo cho mọi trường hợp. Bằng việc cung cấp **đồng thời cả 2 models cho cả tác vụ Tìm nhạc và Quét ảnh**, hệ thống đảm bảo một trải nghiệm đa dạng, chính xác và thích ứng với "khẩu vị" âm nhạc riêng biệt của từng người dùng.
+
+---
+
+# 10. TRIỂN KHAI TRÊN HUGGING FACE SPACES
+
+## 9.1 Tổng Quan
+
+Bên cạnh việc triển khai cục bộ (Local Deployment), dự án cũng đã được cấu hình để chạy trên nền tảng **Hugging Face Spaces**. Đây là môi trường lý tưởng để chia sẻ demo machine learning với cộng đồng.
+
+**Cấu hình Space:**
+
+- **SDK:** Docker
+- **Hardware:** CPU Basic (2 vCPU, 16GB RAM)
+- **Port:** 7860 (Hugging Face default)
+
+## 9.2 Quy Trình Triển Khai
+
+### Bước 1: Chuẩn bị Dockerfile
+
+Do Hugging Face Spaces có các yêu cầu bảo mật khắt khe (chạy dưới non-root user), Dockerfile cần được cấu hình đặc biệt:
+
+```dockerfile
+# Sử dụng Python 3.11 slim
+FROM python:3.11-slim
+
+# Tạo user non-root (bắt buộc trên HF Spaces)
+RUN useradd -m -u 1000 user
+USER user
+ENV PATH="/home/user/.local/bin:$PATH"
+
+# Copy working directory
+WORKDIR /app
+COPY --chown=user:user . /app
+
+# Cài đặt dependencies
+RUN pip install --no-cache-dir -r web_app/requirements-deploy.txt
+
+# Run app
+CMD ["uvicorn", "web_app.app:app", "--host", "0.0.0.0", "--port", "7860"]
+```
+
+### Bước 2: Quản lý Dependencies
+
+Tạo file `web_app/requirements-deploy.txt` riêng biệt, loại bỏ các thư viện chỉ dùng cho training (như matplotlib, seaborn) để giảm kích thước image.
+
+```text
+fastapi>=0.109.0
+uvicorn>=0.27.0
+torch
+transformers
+faiss-cpu
+youtubesearchpython
+...
+```
+
+### Bước 3: Xử Lý Model Files Lớn
+
+Do giới hạn của Git LFS và băng thông, chúng tôi sử dụng cơ chế **Hybrid Loading**:
+
+1. Các file cấu hình nhỏ (`config.py`, `mappings.pkl`) đi kèm code.
+2. Các file model lớn (`best_model.pth`, `faiss_index.bin`) được tải xuống từ Google Drive khi khởi động container thông qua script `download_helper.py`.
+
+## 9.3 Xử Lý Vấn Đề Tương Thích (YouTube)
+
+Một thách thức lớn khi deploy lên cloud là việc YouTube chặn hoặc hạn chế các request embedding từ IP của Data Center.
+
+### Vấn đề gặp phải
+
+- Lỗi **"YouTube refused to connect"** khi hiển thị iframe.
+- API `youtubesearchpython` bị rate limit hoặc block IP.
+
+### Giải pháp: Graceful Fallback
+
+**1. Backend Adjustment (`app.py`):**
+Cập nhật endpoint `/api/youtube` để trả về search URL nếu không lấy được video ID trực tiếp.
+
+```python
+try:
+    # Cố gắng lấy video details
+    videos_search = VideosSearch(query, limit=1)
+    results = await asyncio.to_thread(videos_search.result)
+    # ... logic lấy embed link
+except Exception:
+    # Fallback: Trả về link tìm kiếm trực tiếp
+    return {
+        "type": "fallback",
+        "url": f"https://www.youtube.com/results?search_query={encoded_query}"
+    }
+```
+
+**2. Frontend Adjustment (`main.js`):**
+Javascript sẽ kiểm tra loại phản hồi. Nếu là `fallback`, thay vì mở modal iframe, nó sẽ mở tab mới dẫn đến trang tìm kiếm YouTube.
+
+```javascript
+if (data.type === 'fallback') {
+    // Nếu không thể embed, mở new tab
+    window.open(data.url, '_blank');
+} else {
+    // Normal flow: Mở iframe modal
+    iframe.src = data.embed_url;
+    modal.classList.add('active');
+}
+```
+
+## 9.4 Kết Quả
+
+Với các điều chỉnh trên, hệ thống hoạt động ổn định trên Hugging Face Spaces:
+
+- ✅ Web App load thành công.
+- ✅ Model inference hoạt động bình thường (CPU latency chấp nhận được).
+- ✅ YouTube Integration chuyển sang chế độ fallback thông minh, đảm bảo người dùng vẫn nghe được nhạc dù không xem trực tiếp trong app.
+
+---
+
+# 10. HƯỚNG DẪN SỬ DỤNG
 
 ## 9.1 Requirements
 
@@ -1225,7 +1509,7 @@ python evaluate_final.py
 
 ---
 
-# 10. KẾT LUẬN
+# 11. KẾT LUẬN
 
 ## 10.1 Thành Quả
 

@@ -103,7 +103,7 @@ def main():
         engine.load_index(index_path)
         engine.load_song_data(data_path)
     except Exception as e:
-        print(f"\n❌ Error initializing engine: {e}")
+        print(f"\n[ERROR] Error initializing engine: {e}")
         print("Please ensure you have trained the model and built the FAISS index.")
         return
 

@@ -58,29 +58,45 @@ data/processed/val.csv
 data/processed/test.csv
 data/processed/embeddings/
 
+# ----- Audio Model Processed Data (Generated, large) -----
+data/processed/audio_train.csv
+data/processed/audio_val.csv
+data/processed/audio_test.csv
+data/processed/tracks/
+
 # ----- Model Files (Large) -----
 models/*.pth
 models/*.bin
 models/*.npy
 models/*.pkl
-models/bert_cache/
+models/*.index
 
 # ----- Log Files -----
 *.log
 project_implementation_log.txt
 hybrid_music_engine/project_implementation_log.txt
 
-# =============================================================================
-# FILES TO KEEP (Use git add -f if needed)
-# =============================================================================
-# Keep these files:
-# - models/audio_stats.json (small, config file)
-# - models/metadata_vocab.json (vocabulary)
-# - data/processed/dataset_info.json (metadata)
+# ----- Temp / Debug files -----
+test_output.txt
+web_app/debug_imports.py
 
+# =============================================================================
+# FILES TO KEEP (whitelist overrides above patterns)
+# =============================================================================
+# Model 1 config files (small, needed at runtime)
 !models/audio_stats.json
 !models/metadata_vocab.json
 !data/processed/dataset_info.json
+
+# Model 2 config files (small, needed at runtime)
+!models/tracks_stats.json
+
+# autoencoder_model2.pth is tiny (~11KB), commit directly
+!models/autoencoder_model2.pth
+
+# ----- Environment / Secrets -----
+.env
+.env.*
 
 # ----- OS Files -----
 .DS_Store
@@ -91,3 +107,5 @@ desktop.ini
 *.tmp
 *.temp
 *.bak
+
+models/bert_cache/

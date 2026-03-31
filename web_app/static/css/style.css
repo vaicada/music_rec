@@ -9,32 +9,32 @@
     --bg-secondary: #12121a;
     --bg-card: #1a1a24;
     --bg-card-hover: #22222e;
-    
+
     --text-primary: #ffffff;
     --text-secondary: #a0a0b0;
     --text-muted: #606070;
-    
+
     --accent-primary: #8b5cf6;
     --accent-secondary: #06b6d4;
     --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
-    
+
     --success: #10b981;
     --warning: #f59e0b;
     --error: #ef4444;
-    
+
     /* Spacing */
     --container-max: 1200px;
     --radius-sm: 8px;
     --radius-md: 12px;
     --radius-lg: 20px;
     --radius-xl: 28px;
-    
+
     /* Shadows */
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
     --shadow-glow: 0 0 40px rgba(139, 92, 246, 0.3);
-    
+
     /* Transitions */
     --transition-fast: 0.15s ease;
     --transition-normal: 0.3s ease;
@@ -42,7 +42,9 @@
 }
 
 /* Reset & Base */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -68,7 +70,7 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: 
+    background:
         radial-gradient(circle at 20% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
         radial-gradient(circle at 80% 80%, rgba(6, 182, 212, 0.1) 0%, transparent 40%);
     pointer-events: none;
@@ -108,8 +110,15 @@ body {
 }
 
 @keyframes pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
 }
 
 .logo-text {
@@ -250,6 +259,70 @@ body {
     transform: translateY(0);
 }
 
+/* Autocomplete Dropdown */
+.autocomplete-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    overflow: hidden;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.autocomplete-item {
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-item:hover, .autocomplete-item.selected {
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.autocomplete-icon {
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.autocomplete-text {
+    flex: 1;
+}
+
+.autocomplete-song {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.autocomplete-artist {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.autocomplete-header {
+    padding: 12px 24px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 /* =============================================================================
    Filter Sections (Mood & Context)
    ============================================================================= */
@@ -304,6 +377,60 @@ body {
 }
 
 /* =============================================================================
+   Matched Song Display (Spotify Link Feature)
+   ============================================================================= */
+
+.matched-song-container {
+    margin-top: 32px;
+    padding-top: 32px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.matched-song-card {
+    display: flex;
+    gap: 20px;
+    padding: 24px;
+    background: var(--bg-card);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.matched-song-thumbnail {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: var(--radius-md);
+    flex-shrink: 0;
+}
+
+.matched-song-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.matched-song-name {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.matched-song-artist {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.matched-song-score {
+    font-size: 0.85rem;
+    color: var(--accent-primary);
+    font-weight: 500;
+}
+
+/* =============================================================================
    Loading Spinner
    ============================================================================= */
 
@@ -325,7 +452,9 @@ body {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .loading p {
@@ -364,18 +493,19 @@ body {
 }
 
 /* =============================================================================
-   Song Card
+   Song Card - Redesigned with Album Art
    ============================================================================= */
 
 .song-card {
     background: var(--bg-card);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: var(--radius-lg);
-    padding: 24px;
     transition: var(--transition-normal);
     cursor: pointer;
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .song-card::before {
@@ -388,6 +518,7 @@ body {
     background: var(--accent-gradient);
     opacity: 0;
     transition: var(--transition-normal);
+    z-index: 2;
 }
 
 .song-card:hover {
@@ -398,6 +529,48 @@ body {
 
 .song-card:hover::before {
     opacity: 1;
+}
+
+/* Album Art Placeholder */
+.album-art-placeholder {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(6, 182, 212, 0.1));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.album-art-note {
+    font-size: 40px;
+    opacity: 0.4;
+}
+
+.album-art-placeholder.loaded .album-art-note {
+    display: none;
+}
+
+.album-art-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation: fadeInArt 0.4s ease;
+}
+
+@keyframes fadeInArt {
+    from { opacity: 0; transform: scale(1.03); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+/* Song Body */
+.song-body {
+    padding: 16px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .song-header {
@@ -413,7 +586,7 @@ body {
 }
 
 .song-name {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     margin-bottom: 4px;
     white-space: nowrap;
@@ -422,16 +595,46 @@ body {
 }
 
 .song-artist {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
+/* Song Actions (YouTube + Spotify buttons) */
+.song-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-left: 12px;
+}
+
+/* Spotify Icon Link Button */
+.spotify-link-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(30, 215, 96, 0.15);
+    border-radius: 50%;
+    color: #1ed760;
+    text-decoration: none;
+    transition: var(--transition-normal);
+    flex-shrink: 0;
+}
+
+.spotify-link-btn:hover {
+    background: rgba(30, 215, 96, 0.3);
+    transform: scale(1.15);
+    box-shadow: 0 0 12px rgba(30, 215, 96, 0.35);
+}
+
 .play-btn {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -442,7 +645,6 @@ body {
     cursor: pointer;
     transition: var(--transition-normal);
     flex-shrink: 0;
-    margin-left: 16px;
 }
 
 .play-btn:hover {
@@ -453,15 +655,16 @@ body {
 .song-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 16px;
+    gap: 6px;
+    margin-top: auto;
+    padding-top: 12px;
 }
 
 .tag {
-    padding: 4px 12px;
+    padding: 3px 10px;
     background: rgba(139, 92, 246, 0.15);
     border-radius: 20px;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--accent-primary);
 }
 
@@ -470,9 +673,17 @@ body {
     color: var(--accent-secondary);
 }
 
+.tag.tag-explicit {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    font-weight: 700;
+    font-size: 10px;
+    padding: 3px 7px;
+}
+
 .similarity-score {
-    margin-top: 12px;
-    font-size: 13px;
+    margin-top: 10px;
+    font-size: 12px;
     color: var(--text-muted);
 }
 
@@ -480,7 +691,7 @@ body {
     height: 4px;
     background: var(--bg-secondary);
     border-radius: 2px;
-    margin-top: 6px;
+    margin-top: 5px;
     overflow: hidden;
 }
 
@@ -489,6 +700,30 @@ body {
     background: var(--accent-gradient);
     border-radius: 2px;
     transition: width 0.5s ease;
+}
+
+/* Audio Preview */
+.audio-preview {
+    margin-top: 12px;
+    width: 100%;
+}
+.audio-preview audio {
+    width: 100%;
+    height: 32px;
+    border-radius: 16px;
+    outline: none;
+}
+.audio-preview audio::-webkit-media-controls-panel {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+.audio-preview audio::-webkit-media-controls-play-button,
+.audio-preview audio::-webkit-media-controls-volume-slider,
+.audio-preview audio::-webkit-media-controls-mute-button,
+.audio-preview audio::-webkit-media-controls-timeline,
+.audio-preview audio::-webkit-media-controls-current-time-display,
+.audio-preview audio::-webkit-media-controls-time-remaining-display {
+    color: #fff;
+    filter: invert(1);
 }
 
 /* =============================================================================
@@ -534,6 +769,7 @@ body {
         opacity: 0;
         transform: scale(0.95) translateY(20px);
     }
+
     to {
         opacity: 1;
         transform: scale(1) translateY(0);
@@ -587,6 +823,182 @@ body {
 }
 
 /* =============================================================================
+   Image Upload Section
+   ============================================================================= */
+
+.filter-subtitle {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    margin-bottom: 32px;
+    margin-top: -16px;
+}
+
+.image-upload-container {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.image-drop-zone {
+    border: 2px dashed rgba(139, 92, 246, 0.4);
+    border-radius: var(--radius-lg);
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition-normal);
+    background: var(--bg-card);
+    position: relative;
+    overflow: hidden;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-drop-zone:hover {
+    border-color: var(--accent-primary);
+    background: var(--bg-card-hover);
+}
+
+.image-drop-zone.drag-over {
+    border-color: var(--accent-secondary);
+    background: rgba(6, 182, 212, 0.1);
+    transform: scale(1.02);
+}
+
+.drop-zone-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.upload-icon {
+    font-size: 48px;
+    opacity: 0.8;
+}
+
+.upload-text {
+    font-size: 16px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.upload-hint {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.image-preview {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: var(--radius-md);
+    object-fit: contain;
+}
+
+.image-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.btn-primary,
+.btn-secondary {
+    padding: 12px 28px;
+    border-radius: var(--radius-lg);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-normal);
+    border: none;
+}
+
+.btn-primary {
+    background: var(--accent-gradient);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glow);
+}
+
+.btn-secondary {
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+
+/* Detected Mood Display */
+.detected-mood-container {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.detected-mood-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    background: var(--bg-card);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.detected-icon {
+    font-size: 40px;
+    flex-shrink: 0;
+}
+
+.detected-info {
+    flex: 1;
+}
+
+.detected-label {
+    font-size: 16px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.detected-label strong {
+    color: var(--accent-primary);
+    font-size: 18px;
+}
+
+.detected-type {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.confidence-bar {
+    height: 6px;
+    background: var(--bg-secondary);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.confidence-fill {
+    height: 100%;
+    background: var(--accent-gradient);
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+.confidence-text {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* =============================================================================
    Footer
    ============================================================================= */
 
@@ -615,41 +1027,41 @@ body {
         flex-direction: column;
         gap: 16px;
     }
-    
+
     .nav-links {
         width: 100%;
         justify-content: center;
     }
-    
+
     .hero {
         padding: 40px 0 40px;
     }
-    
+
     .search-box {
         flex-direction: column;
         padding: 16px;
     }
-    
+
     .artist-input {
         border-left: none;
         border-top: 1px solid rgba(255, 255, 255, 0.1);
     }
-    
+
     .search-btn {
         width: 100%;
         justify-content: center;
     }
-    
+
     .filter-buttons {
         gap: 12px;
     }
-    
+
     .mood-btn,
     .context-btn {
         padding: 16px 20px;
         min-width: 100px;
     }
-    
+
     .results-grid {
         grid-template-columns: 1fr;
     }

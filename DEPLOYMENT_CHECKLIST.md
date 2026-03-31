@@ -1,6 +1,6 @@
 # Vercel Deployment Checklist (LITE VERSION)
 
-## ✅ Đã Hoàn Thành
+## Completed Tasks
 
 - [x] Tạo system auto-download (download_helper.py)
 - [x] Cấu hình .gitignore

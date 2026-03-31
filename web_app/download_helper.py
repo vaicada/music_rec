@@ -4,10 +4,9 @@ Download Helper - Automatically download large model files from external storage
 This module handles downloading large files (model weights, FAISS index, datasets)
 from external sources (Google Drive, AWS S3, etc.) when they are missing locally.
 
-This is necessary for Vercel deployment because:
+This is necessary for deployment (Hugging Face Spaces / Docker) because:
 - GitHub has a 100MB file size limit
-- Vercel has a ~250MB total deployment size limit
-- Our model files total ~1.5GB
+- Our model files total ~600MB+ (Model 1 + Model 2)
 
 Author: Graduation Project
 Created: 2026-01-19
@@ -62,7 +61,23 @@ FILE_CONFIGS = {
         "url": "https://drive.google.com/uc?id=1n9kSf_sC-ZPUEZYcXYHvDSnXS_pU0Ttz",  # audio_stats.json
         "path": "../models/audio_stats.json",
         "size_mb": 0.001,
-        "description": "Audio feature normalization statistics"
+        "description": "Audio feature normalization statistics (Model 1)"
+    },
+
+    # -------------------------------------------------------------------------
+    # Model 2 (Audio Autoencoder) files
+    # -------------------------------------------------------------------------
+    "tracks_faiss_index": {
+        "url": "https://drive.google.com/uc?id=15uPbGZFiG_UaS8DtM9u9I2R7MoUakVBG",  # tracks_faiss.index
+        "path": "../models/tracks_faiss.index",
+        "size_mb": 133,
+        "description": "Model 2 FAISS index (1.2M audio tracks)"
+    },
+    "tracks_faiss_mappings": {
+        "url": "https://drive.google.com/uc?id=1mSEPyE0l9_BoPYrlRWN9pymp63D0P1FR",  # tracks_faiss.index.mappings.pkl
+        "path": "../models/tracks_faiss.index.mappings.pkl",
+        "size_mb": 104,
+        "description": "Model 2 FAISS mappings (track metadata)"
     }
 }
 
@@ -192,11 +207,15 @@ def ensure_files_ready() -> None:
         print("="*60)
         print("\nPlease follow these steps:")
         print("1. Upload the following files to Google Drive:")
+        print("   [Model 1]")
         print("   - models/best_model.pth")
         print("   - models/faiss_index.bin")
         print("   - models/faiss_index.bin.mappings.pkl")
         print("   - data/processed/train.csv")
-        print("   - models/audio_stats.json")
+        print("   [Model 2]")
+        print("   - models/tracks_faiss.index")
+        print("   - models/tracks_faiss.index.mappings.pkl")
+
         print("\n2. Make files publicly accessible (Anyone with link can view)")
         print("\n3. Get the file IDs from the share links")
         print("\n4. Update FILE_CONFIGS in download_helper.py with your file IDs")

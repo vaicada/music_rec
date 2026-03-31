@@ -75,7 +75,7 @@ def train_model(args):
     history = trainer.train(train_data, val_data, epochs=args.epochs)
     
     # Save final model
-    model_path = os.path.join(config.paths.model_dir, "final_model.pth")
+    model_path = os.path.join(config.paths.model_dir, "best_model.pth")
     os.makedirs(config.paths.model_dir, exist_ok=True)
     model.save(model_path)
     

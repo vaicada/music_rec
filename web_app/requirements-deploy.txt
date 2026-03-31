@@ -1,2 +1,23 @@
-# Add gdown to requirements for downloading files from Google Drive
+# Dependencies for web app deployment
+
+# Web framework
+uvicorn
+fastapi
+
+# YouTube integration
+yt-dlp
+
+# HTTP requests for Spotify oEmbed API
+requests>=2.31.0
+
+# Fuzzy string matching for Spotify link feature
+rapidfuzz>=3.0.0
+
+# Google Drive file downloads
 gdown>=5.1.0
+
+# Image-based recommendation (CLIP)
+transformers>=4.30.0
+pillow>=10.0.0
+python-multipart>=0.0.6
+

@@ -725,31 +725,7 @@ def run_data_preparation(max_rows: Optional[int] = None):
     print("\n\n" + "#" * 60)
     print("# STEP 1.1: DATA LOADING & EXPLORATION")
     print("#" * 60)
-    
-    # Load and merge all 4 datasets
-    merged_df = load_and_merge_all_datasets(max_rows)
-    
-    # Note: Normalization is done during load_and_merge_all_datasets()
-    # - normalize_columns() standardizes column names
-    # - normalize_to_spotify_api() converts 0-100 to 0-1 scale
-    
-    # Handle missing values
-    cleaned_df = handle_missing_values(merged_df)
-    
-    # Free memory
-    del merged_df
-    gc.collect()
-    
-    # Create splits
-    train_df, val_df, test_df = create_splits(
-        cleaned_df,
-        train_ratio=DataPrepConfig.TRAIN_RATIO,
-        val_ratio=DataPrepConfig.VAL_RATIO,
-        test_ratio=DataPrepConfig.TEST_RATIO,
-        random_seed=DataPrepConfig.RANDOM_SEED
-    )
-    
-    # Save splits
+     # Save splits
     print("\nSaving data splits...")
     train_df.to_csv(DataPrepConfig.OUTPUT_DIR / "train.csv", index=False)
     val_df.to_csv(DataPrepConfig.OUTPUT_DIR / "val.csv", index=False)

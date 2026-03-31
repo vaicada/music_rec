@@ -26,6 +26,7 @@
             </div>
             <nav class="nav-links">
                 <a href="#" class="nav-link active" data-mode="search">Search</a>
+                <a href="#" class="nav-link" data-mode="image">From Image</a>
                 <a href="#" class="nav-link" data-mode="mood">By Mood</a>
                 <a href="#" class="nav-link" data-mode="context">By Activity</a>
             </nav>
@@ -37,7 +38,7 @@
             <p class="hero-subtitle">AI-powered music recommendations based on your taste</p>
 
             <!-- Search Section -->
-            <div class="search-container" id="search-mode">
+            <div class="search-container" id="search-mode" style="position: relative;">
                 <div class="search-box">
                     <input type="text" id="searchInput" class="search-input" placeholder="Enter a song name..."
                         autocomplete="off">
@@ -52,7 +53,29 @@
                         Search
                     </button>
                 </div>
+                
+                <!-- Autocomplete Dropdown -->
+                <div id="autocompleteDropdown" class="autocomplete-dropdown hidden">
+                    <!-- Dynamic content will go here (recent searches / suggestions) -->
+                </div>
+                
+                <!-- Model Selection for Search -->
+                <div class="model-selection" id="searchModelSelection" style="margin-top: 1rem; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; text-align: center;">
+                    <p class="model-selection-title">Choose Recommendation Model:</p>
+                    <div class="radio-group" style="flex-direction: row; justify-content: center; gap: 2rem; flex-wrap: wrap;">
+                        <label class="radio-label">
+                            <input type="radio" name="searchModel" value="model1" checked>
+                            <span class="radio-text">🧠 Model 1 (Hybrid)</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="searchModel" value="model2">
+                            <span class="radio-text">🎵 Model 2 (Audio-Only)</span>
+                        </label>
+                    </div>
+                </div>
             </div>
+
+
 
             <!-- Mood Section -->
             <div class="filter-container hidden" id="mood-mode">
@@ -78,6 +101,60 @@
                         <span class="mood-emoji">😠</span>
                         <span>Angry</span>
                     </button>
+                </div>
+            </div>
+
+            <!-- Image Upload Section -->
+            <div class="filter-container hidden" id="image-mode">
+                <h3 class="filter-title">Upload an image to get music recommendations</h3>
+                <p class="filter-subtitle">We'll analyze the mood or context from your image</p>
+
+                <div class="image-upload-container">
+                    <input type="file" id="imageInput" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+
+                    <div class="image-drop-zone" id="imageDropZone"
+                        onclick="document.getElementById('imageInput').click()">
+                        <div class="drop-zone-content" id="dropZoneContent">
+                            <span class="upload-icon">📷</span>
+                            <p class="upload-text">Click to upload or drag and drop</p>
+                            <p class="upload-hint">JPEG, PNG, WebP, GIF (max 10MB)</p>
+                        </div>
+                        <img id="imagePreview" class="image-preview hidden" alt="Preview">
+                    </div>
+
+                    <div class="model-selection" id="imageModelSelection">
+                        <p class="model-selection-title">Choose Recommendation Model:</p>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="imageModel" value="model1" checked>
+                                <span class="radio-text">🧠 Model 1 (Hybrid: Mood & Lyrics)</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="imageModel" value="model2">
+                                <span class="radio-text">🎵 Model 2 (Audio-Only: Features)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="image-actions hidden" id="imageActions">
+                        <button class="btn-secondary" onclick="clearImage()">Clear</button>
+                        <button class="btn-primary" onclick="handleImageUpload()">Analyze & Recommend</button>
+                    </div>
+
+                    <!-- Detected Mood/Context Display -->
+                    <div class="detected-mood-container hidden" id="detectedMoodContainer">
+                        <div class="detected-mood-card">
+                            <span class="detected-icon" id="detectedIcon">🎵</span>
+                            <div class="detected-info">
+                                <p class="detected-label">Detected: <strong id="detectedLabel"></strong></p>
+                                <p class="detected-type" id="detectedType"></p>
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" id="confidenceFill"></div>
+                                </div>
+                                <p class="confidence-text" id="confidenceText"></p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

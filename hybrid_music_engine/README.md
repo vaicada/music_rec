@@ -11,7 +11,7 @@ A modular Python package for music recommendations using a **Hybrid Multi-modal 
 - **Metadata Embeddings** for genre, key, and emotion
 - **FAISS** for fast similarity search
 
-## 🏗️ Architecture
+## Architecture
 
 ```
                     ┌─────────────────────────────────────────┐
@@ -51,7 +51,7 @@ A modular Python package for music recommendations using a **Hybrid Multi-modal 
                     └─────────────────────────────┘
 ```
 
-## 📦 Module Structure
+## Module Structure
 
 ```
 hybrid_music_engine/
@@ -66,7 +66,7 @@ hybrid_music_engine/
 └── example_usage.py    # Usage examples
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -132,7 +132,7 @@ python example_usage.py index --model models/best_model.pth --data data/songs.cs
 python example_usage.py recommend --song "Shape of You" --artist "Ed Sheeran"
 ```
 
-## 📊 Features
+## Features
 
 ### Recommendation Modes
 
@@ -160,7 +160,7 @@ Sample log output:
                                              Details: duration_seconds=3.33
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 ```python
 from hybrid_music_engine import get_config
@@ -179,7 +179,7 @@ config.bert.max_length = 256
 config.bert.freeze_bert_layers = 10
 ```
 
-## 🎯 Model Details
+## Model Details
 
 ### Input Features
 
@@ -205,7 +205,7 @@ config.bert.freeze_bert_layers = 10
 - **64D L2-normalized embedding** for each song
 - Used for similarity search via FAISS IndexFlatL2
 
-## 📈 Performance Targets
+## Performance Targets
 
 | Metric | Target |
 |--------|--------|
@@ -214,7 +214,7 @@ config.bert.freeze_bert_layers = 10
 | Inference Time | < 50ms |
 | Songs Indexed | 500K - 1.2M |
 
-## 🔧 Requirements
+## Requirements
 
 - Python 3.8+
 - PyTorch 2.0+
@@ -222,7 +222,7 @@ config.bert.freeze_bert_layers = 10
 - FAISS (cpu or gpu)
 - pandas, numpy, scikit-learn
 
-## 📝 API Reference
+## API Reference
 
 ### MusicRecommendationEngine
 
@@ -256,11 +256,11 @@ logger.log_metric(name, value, epoch)
 logger.log_error(message, category, exception)
 ```
 
-## 📄 License
+## License
 
 MIT License - See LICENSE file for details.
 
-## 👨‍🎓 Author
+## Author
 
 Graduation Project - Music Recommendation System
 Created: 2026-01-06
