@@ -293,54 +293,6 @@ liveness:         0.010 - 1.000 (mean=0.197) [OK]
 | `val_embeddings.npy` | 161.6 MB | BERT embeddings cho val (55143 × 768) |
 | `test_embeddings.npy` | 161.6 MB | BERT embeddings cho test (55144 × 768) |
 
-## 3.4 Trực Quan Hóa Dữ Liệu (Data Visualization)
-
-Phần này tổng hợp các kết quả trực quan hóa phân tích tập dữ liệu có nhãn (`spotify_dataset.csv`), tập dữ liệu gốc (`tracks_features.csv`) và không gian học máy tương ứng của hai mô hình.
-
-### 3.4.1 Tổng Quan Các Bộ Dữ Liệu Thực Nghiệm
-
-**Dataset 1: `spotify_dataset.csv` (Model 1 Input)**
-- **Kích thước:** 496,278 tracks (tập train + val).
-- **Phân loại:** 6 nhãn cảm xúc chính (Joy, Sadness, Anger, Fear, Love, Surprise).
-- **Vấn đề:** Mất cân bằng lớp (Class Imbalance) cực kỳ nghiêm trọng khi Top 3 cảm xúc chiếm tới 88.8%. Dữ liệu cấu trúc có giám sát (Supervised) để luyện mô hình Hybrid.
-
-**Dataset 2: `tracks_features.csv` (Model 2 Input)**
-- **Kích thước:** 1,204,025 tracks.
-- **Biến đổi:** Nhạc phát hành từ năm 1921 đến 2021, đóng gói dưới dạng 9 features âm thanh thô.
-- **Tính chất:** File dữ liệu hoàn toàn không nhãn (Unsupervised) cho Audio Autoencoder.
-
-### 3.4.2 Phân Tích Dataset `spotify_dataset.csv` (Model 1 Input)
-
-#### ⭐ DNA Âm Thanh Theo Cảm Xúc (Radar Chart)
-- **Cơ chế:** Radar Chart đa chiều thể hiện giá trị trung bình 7 audio features trên 6 nhóm cảm xúc. Đã giải quyết được việc định hướng thuộc tính nào mạnh nhất ở dòng cảm xúc nào.
-- **Insights:** Thể hiện "chữ ký âm thanh" sinh động, ví dụ *Joy* dẫn đầu về **Danceability**, trong khi *Anger* lại vượt trội ở **Energy** và **Speechiness** do lẫn nhiều rap. Sự phân bua mờ nhạt giữa các ranh giới không gian khẳng định phải sử dụng xử lý Natural Language (NLP) từ Lyrics mới có thể định hình kết quả đúng thay vì chỉ dùng âm thanh.
-
-#### ⭐ Tổng Quan Bộ Dữ Liệu (Dashboard 2x2)
-Bảng điều khiển kết hợp 4 panel chuyên sâu về mặt thống kê: 
-1. **Mất cân bằng lớp (Class Imbalance):** Phần lớn nghiêng về *Joy, Sadness, Anger*, còn lại rất ít.
-2. **Audio Features Boxplot:** Nắm toàn cảnh phân phối từ Min đến Max của Daceability, Energy,...
-3. **Phân phối Tempo:** Tập trung hình chuông rất chuẩn quanh 120 BPM.
-4. **Mối quan hệ Valence - Energy:** *Love* bất ngờ lại nằm đơn độc như một mảng nhiễu, trong khi các nhãn còn lại tụ cụm tương đồng trung tính.
-
-### 3.4.3 Phân Tích Dataset `tracks_features.csv` (Model 2 Input)
-
-#### ⭐ Sự Tiến Hóa Âm Thanh Qua Các Thập Kỷ (Radar Chart by Decade)
-Radar Chart theo dõi sự thay đổi dòng nhạc 7 thập kỷ qua:
-- **Biến thiên lịch sử:** **Acousticness** (tính mộc) đâm dốc mạnh qua từng năm, đại diện cho xu hướng rời bỏ nhạc cụ và chuyển dần sang sản xuất tự động. Tương quan với nó, **Energy** và **Speechiness** theo chiều đi lên mạnh từ 1990+.
-
-#### ⭐ Ma Trận Mật Độ Phân Phối (Hexbin Density Grid)
-- **Kỹ thuật xử lý Big Data:** Trực quan hóa 1.2 triệu điểm mẫu sẽ khiến các Scatter Plot đen đặc lại vì lỗi overplotting. Vì thế sử dụng lưới lục giác log-scale (Hexbin) thể hiện "vùng tụ tập".
-- **Insights:** Chỉ ra phân cực bimodal rõ ràng ở Acousticness. Tương quan mạnh nhất thuộc về cặp Danceability và Valence - Nhạc càng dễ khiêu vũ thì càng mang ý nghĩa tích cực!
-
-### 3.4.4 Trực Quan Hóa Không Gian Nhúng Mô Hình (Embeddings Space)
-
-Để chứng minh luận điểm hệ thống hoạt động chính xác (Giải thích được - Explainability AI):
-- **Model 1 (Hybrid) 3D FAISS / UMAP:** Không gian tương tác biểu đồ Scatter Plot 3D phân mảnh từng hòn đảo của các cụm Happy, Sad, Party rõ nét. Do kết hợp cả Lyrics NLP mạnh mẽ.
-- **Model 2 (Audio Autoencoder 1.2M) 2D Gradient:** Mô hình tự tạo thành một Spectrum âm thanh mịn màng chuyển tiếp tự nhiên từ Acoustic tĩnh mịch sang EDM hỗn mang cường độ cao, không cần tới Nhãn phân loại con người - Khẳng định Model 2 Unsupervised hoạt động cực kì hiệu quả trên 1.2 triệu bài hát.
-
-### 3.4.5 Kết Luận Dữ Liệu
-Vượt qua sự phức tạp khi mang trên mình **2 bộ dữ liệu khổng lồ khác nhau (tổng 1.7 triệu mẫu)**, những biểu đồ đã chọn lọc (Radar, Dashboard 4-panel, Hexbin Density...) giúp minh bạch hóa hoàn toàn cấu trúc không gian Vector và "chất liệu âm nhạc" nền tảng, tạo đòn bẩy vững chắc để hệ thống Recommend System gợi ý đạt hiệu năng cực cao.
-
 ---
 
 # 4. KIẾN TRÚC HỆ THỐNG
@@ -591,22 +543,7 @@ SEARCH PHASE (Online - mỗi request):
 | Fear | Fear, Sadness, Anger |
 | Surprise | Surprise, Joy |
 
-## 7.7 Cơ Chế Tìm Kiếm Bài Hát Của Model 2 (Audio-Only)
-
-Mặc dù `Model 2` vốn dĩ chỉ xử lý các thông số âm thanh, tính năng tiềm kiếm bài hát bằng Name/Text lại phải sử dụng lớp `CLIPAudioBridge`. Dưới đây là phân tích luồng xử lý và lý do đằng sau kiến trúc này:
-
-- **Bản chất của Model 2**: Model 2 (Audio-Only) là một mạng Neural Network thu gọn chỉ đóng vai trò biến đổi 9 con số đặc trưng âm thanh đầu vào thành 1 vector 32 chiều (embeddings). Bản thân Model 2 không "hiểu" ngôn ngữ con người (không biết Text), cũng không tự định danh lưu trữ bài hát và không nhận diện bài hát nào giống bài hát nào.
-- **Tại sao lại dùng `CLIP Bridge`?**: Việc truy vấn `Model 2` qua class mang tên "CLIP" hoàn toàn **không dính dáng tới xử lý ảnh CLIP**. Sở dĩ mượn class `CLIPAudioBridge` là vì module này đã khởi tạo kết nối (Initialize) tới toàn bộ **Database bài hát (song mappings)**, **những trọng số (weights) của Model 2** và bộ tìm kiếm **FAISS Index 2**. 
-- **Cách Backend tìm kiếm**: Khi người dùng gõ tìm bài hát bằng tên (với lựa chọn Model 2), Backend sẽ yêu cầu hàm tìm kiếm bên trong module này (`recommend_from_song`) thực hiện 4 bước xử lý:
-    1. Đọc tên Text vừa nhập, tra cứu ID bài hát gốc nằm ở đâu trong Database.
-    2. Dùng ID truy cập trực tiếp FAISS để trích xuất Vector biểu diễn âm thanh của nó.
-    3. Thực thi truy vấn các Vector biểu diễn có khoảng cách hình học gần nhất theo Index của hệ thống.
-    4. Mapping ngược vector về tên và nghệ sĩ rồi trả kết quả về Frontend.
-
-Tóm lại, `CLIPAudioBridge` chỉ đóng vai trò "kho lưu trữ tài nguyên" chứa FAISS + Database cho Audio-Only model, giúp không phải tải lại các models vào RAM trong lúc server chạy thực thi tính năng Tìm kiếm văn bản cơ bản.
-
 ---
-
 
 # 8. ỨNG DỤNG WEB
 
@@ -1241,116 +1178,7 @@ result = await asyncio.to_thread(
 
 ---
 
-# 9. GỢI Ý NHẠC TỪ HÌNH ẢNH & SỰ ĐA DẠNG MÔ HÌNH (Image-to-Music & Model Diversity)
-
-## 9.1 Tổng Quan: Sự Đa Dạng Trong Gợi Ý
-
-Hệ thống cung cấp hai mô hình hoàn toàn độc lập (Model 1 và Model 2) để đáp ứng các nhu cầu gợi ý khác nhau, đồng thời hỗ trợ cả hai phương thức đầu vào: gõ tên bài hát (Text Search) và tải lên bức ảnh (Image Search).
-
-*   **Model 1 (Hybrid Model):** Gợi ý dựa trên sự phân tích **Ngữ nghĩa (Lyrics - BERT)** kết hợp với Âm thanh. Model này ưu tiên tìm các bài hát có "nội dung" và "cảm xúc" tương đồng.
-*   **Model 2 (Audio-Only Autoencoder):** Gợi ý dựa hoàn toàn vào **Đặc trưng vật lý của Âm thanh (Audio Features)**. Model này tìm kiếm các bài hát có "Vibe", "Nhịp điệu" hoặc "Cấu trúc âm thanh" tương đồng với dữ liệu biểu diễn khổng lồ 1.2 triệu bài hát.
-
-**Điểm mạnh của kiến trúc kép:** Dù người dùng tìm kiếm bằng cách gõ tên bài hát hay bằng một bức ảnh, họ đều có quyền chọn Model 1 hoặc Model 2. Điều này cung cấp 2 "khẩu vị" âm nhạc khác biệt: một bên chú trọng ý nghĩa lời ca, một bên chú trọng năng lượng và nhịp điệu (cực kỳ tốt cho nhạc quốc tế, nhạc không lời, EDM).
-
-Để thực hiện Gợi ý bằng Hình ảnh trên Model 2 (vốn chỉ nhận thông số âm thanh) mà không cần mạng Neural đa phương thức (Multimodal) khổng lồ, hệ thống sử dụng kiến trúc **Bridge (Cầu nối)**.
-
-## 9.2 Kiến Trúc Hệ Thống (Model 2: Audio Autoencoder Bridge)
-
-Kiến trúc Model 2 được thiết kế theo hướng học không giám sát (Unsupervised Learning) tập trung hoàn toàn vào đặc trưng âm thanh thuần túy, loại bỏ sự phụ thuộc vào các nhãn cảm xúc chủ quan. Khi nhận đầu vào là hình ảnh, CLIP sẽ đóng vai trò tiền xử lý:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       MULTI-INPUT RECOMMENDATION PIPELINE                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  [INPUT A: IMAGE]                   │       [INPUT B: SONG NAME/TEXT]       │
-│          │                          │                   │                   │
-│  ┌───────▼───────┐                  │           ┌───────▼───────┐           │
-│  │   CLIP Model  │                  │           │ Text Search   │           │
-│  │ (Vision/Text) │                  │           │   Database    │           │
-│  └───────┬───────┘                  │           └───────┬───────┘           │
-│          │ (Label: "Happy", etc.)   │                   │ (Target Song)     │
-│  ┌───────▼───────┐                  │                   │                   │
-│  │ CLIP Audio    │                  │                   │                   │
-│  │   Bridge      │                  │                   │                   │
-│  └───────┬───────┘                  │                   │                   │
-│          │ (Vector 9D: Energy=0.75) │                   │ (Raw 9D Audio)    │
-│          └──────────────────────────┴───────────────────┘                   │
-│                                     │                                       │
-│                             ┌───────▼───────┐                               │
-│                             │ Audio Model 2 │(Autoencoder Bottleneck)       │
-│                             │  (Encoder)    │                               │
-│                             └───────┬───────┘                               │
-│                                     │ (Latent Vector 32D)                   │
-│                                     │                                       │
-│                             ┌───────▼───────┐                               │
-│                             │  FAISS Index  │                               │
-│                             │ (1.2M songs)  │                               │
-│                             └───────┬───────┘                               │
-│                                     │                                       │
-│                           [Top-K Similar Songs]                             │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## 9.3 Quy Trình Thực Hiện & Logic Hoạt Động
-
-Quá trình chia thành 2 giai đoạn: **Offline (Chuẩn bị hệ thống)** và **Online (Khi người dùng thực hiện yêu cầu)**.
-
-### 9.3.1 Giai Đoạn Offline (Xây dựng Model 2 & Index)
-
-Thay vì dùng Model Phân loại (Classification) báo cáo tỷ lệ phần trăm các cảm xúc (có sự sai lệch và giới hạn do dữ liệu gán nhãn chủ quan), Model 2 được cải tiến thành một **Autoencoder**:
-
-1. **Chuẩn bị dữ liệu (Data Preparation):**
-   - Đọc 1.2 triệu dòng từ tập dataset thô `tracks_features.csv`.
-   - Lọc và trích xuất đúng 9 thông số vật lý của âm thanh: `energy`, `danceability`, `valence`, `tempo`, `acousticness`, `instrumentalness`, `speechiness`, `liveness`, `key`.
-   - Chuẩn hoá toàn bộ các thông số (Normalize Z-score cho tempo, Scale 0-1 cho biểu diễn phân loại).
-
-2. **Huấn Luyện (Autoencoder Training):**
-   - **Encoder:** Nén vector 9 chiều (thông số âm thanh) vào một không gian ẩn (Latent space) 32 chiều.
-   - **Decoder:** Giải nén từ 32 chiều trở lại 9 chiều sao cho giống bản gốc nhất.
-   - **Loss function:** Thay vì CrossEntropy, mô hình dùng **MSE (Mean Squared Error)** để tối ưu hoá sao cho độ lệch sát với vật lý âm thanh nhất. Quá trình này hoàn toàn Unsupervised, tự học từ 1.2 triệu bài mà không cần label.
-
-3. **Lưu trữ Index (FAISS Indexing):**
-   - Cắt bỏ phần Decoder đi. Chỉ giữ phần Encoder để tạo ra các Embeddings (Vector đại diện).
-   - Truyền toàn bộ 1.2 triệu track âm thanh qua Encoder để lấy 1.2 triệu vector 32 chiều.
-   - Đưa tất cả vector 32 chiều này vào cơ sở dữ liệu FAISS `IndexFlatIP`. Lúc này hệ thống sẵn sàng tìm kiếm siêu tốc.
-
-### 9.3.2 Giai Đoạn Online (Inference / Recommending)
-
-Khi user upload một hình ảnh, luồng hoạt động diễn ra theo các bước cực kỳ logic để "phiên dịch" thị giác thành thính giác:
-
-1. **Computer Vision (CLIP):**
-   - Ảnh truyền qua mô hình [OpenAI CLIP](https://huggingface.co/openai/clip-vit-base-patch32).
-   - CLIP thực hiện Zero-shot Classification để phân loại bức ảnh vào một trong các nhãn cài đặt sẵn (VD: `Happy`, `Sad`, `Party`, `Relax`, `Workout`, `Driving`, `Calm`).
-   - CLIP chỉ xuất ra chữ (Label Text), không hề biết gì về âm thanh.
-
-2. **The "Bridge" (Cầu nối):**
-   - Module `CLIPAudioBridge` (`clip_audio_bridge.py`) nhận label text.
-   - Dựa vào từ điển quy chuẩn (`AUDIO_PROFILES`) do con người định nghĩa, module này nội suy ra một **Vector 9 chiều mong muốn**.
-     - *Ví dụ:* Nếu CLIP nhãn bức ảnh là `"Relax"`, Bridge sẽ xuất ra một vector quy định: `{ energy: 0.18, valence: 0.60, tempo: 84.0, acousticness: 0.78, ... }`
-   - Nghĩa là bức ảnh đã được "Dịch" thành các thông số kỹ thuật âm nhạc!
-
-3. **Search & Retrieve:**
-   - Vector dự định trên sẽ đi qua Encoder của Model 2 để trở thành vector 32 chiều (Query Vector).
-   - FAISS Search Query Vector này trong cơ sở 1.2 triệu bài hát.
-   - Result: FAISS nhặt ra và trả về n bài hát có profile âm thanh gần giống với yêu cầu "Relax" kia nhất. Từ mặt định lượng vật lý, những bài hát này gần như chắc chắn sẽ đem lại cảm giác y như bức ảnh.
-
-## 9.4 So Sánh Sự Lựa Chọn Model 1 & Model 2
-
-| Tiêu Chí | Model 1 (Hybrid Text/Audio) | Model 2 (Pure Audio Autoencoder) |
-|----------|-----------------------------|----------------------------------|
-| **Kích thước Dataset**| Tối ưu cho `spotify_dataset.csv` (~550K bài) | Mở rộng cho `tracks_features.csv` (1.2 Triệu bài) |
-| **Logic Gợi ý Bài hát (By Text)**| Tìm bài hát có cùng nội dung lời ca và cung bậc cảm xúc | Tìm các bài có cùng cường độ nhịp phách, giai điệu, nhạc cụ (Vibe) |
-| **Logic Gợi ý Hình ảnh (By Image)**| Translate hình ảnh -> Cảm xúc nội dung -> FAISS | Trích xuất Label Hình Ảnh -> Audio Profile (Bridge) -> FAISS |
-| **Bản chất Học máy** | Supervised Learning (Loss: CrossEntropy phân loại) | Unsupervised Learning (Loss: MSE phục hồi hình thái âm thanh) |
-| **Use-case tốt nhất** | Tìm bài hát có ý nghĩa tương đương bài gốc. | Tìm nhạc không lời, EDM, hoặc những bài hợp để chạy bộ/chill bất kể ý nghĩa lời hát. |
-
-Tính năng này chứng minh: Không có một Model nào là hoàn hảo cho mọi trường hợp. Bằng việc cung cấp **đồng thời cả 2 models cho cả tác vụ Tìm nhạc và Quét ảnh**, hệ thống đảm bảo một trải nghiệm đa dạng, chính xác và thích ứng với "khẩu vị" âm nhạc riêng biệt của từng người dùng.
-
----
-
-# 10. TRIỂN KHAI TRÊN HUGGING FACE SPACES
+# 9. TRIỂN KHAI TRÊN HUGGING FACE SPACES
 
 ## 9.1 Tổng Quan
 
@@ -1550,3 +1378,1016 @@ python evaluate_final.py
 
 *Báo cáo được tổng hợp từ 7 file documentation của dự án.*  
 *Hybrid Music Recommendation Engine - Graduation Project 2026*
+  
+# DOCUMENTATION: DEPLOYMENT_GUIDE.md  
+# =============================================================================
+
+# DEPLOYMENT GUIDE: Music Recommender Web App to Hugging Face Spaces
+
+# =============================================================================
+
+## OVERVIEW
+
+This guide explains how to deploy the Music Recommender Web App to Hugging Face Spaces using external file hosting for large model files.
+
+**Platform:** Hugging Face Spaces
+**SDK:** Docker
+**Hardware:** CPU Basic (2 vCPU, 16GB RAM) - Free Tier is sufficient
+
+---
+
+## PREREQUISITES
+
+1. **Google Drive account** (for hosting files)
+2. **Hugging Face account**
+3. **Local environment** with Python 3.11+
+4. **Git** installed
+
+---
+
+## DEPLOYMENT STEPS
+
+### STEP 1: Upload Files to Google Drive
+
+Upload these files to your Google Drive (Total ~210 MB):
+
+```
+📦 Files to upload:
+├── best_model.pth              (~5 MB)
+├── faiss_index.bin             (~135 MB)
+└── faiss_index.bin.mappings.pkl (~71 MB)
+```
+
+**Note:** The app skips `train.csv` (1GB) and uses the lighter `models/song_metadata.csv` included in the repo.
+
+**How to upload:**
+
+1. Go to [drive.google.com](https://drive.google.com)
+2. Create a new folder (e.g., "music_recommender_models")
+3. Upload the 3 files above
+4. For EACH file:
+   - Right-click → Share
+   - Change to "Anyone with the link can view"
+   - Copy the link and extract the FILE ID
+
+---
+
+### STEP 2: Update download_helper.py with File IDs
+
+Open `web_app/download_helper.py` and replace the `YOUR_*_FILE_ID` placeholders with your actual Google Drive file IDs.
+
+---
+
+### STEP 3: Create Hugging Face Space
+
+1. Go to [huggingface.co/spaces](https://huggingface.co/spaces)
+2. Click **Create new Space**
+3. **Space name:** `music-recommender` (or your choice)
+4. **License:** MIT or Apache 2.0
+5. **Space SDK:** **Docker** (Important! Do NOT select Gradio or Streamlit)
+6. Click **Create Space**
+
+---
+
+### STEP 4: Push Code to Space
+
+You can push code directly via browser or use Git.
+
+**Using Git (Recommended):**
+
+```bash
+# Clone the empty space (replace USER with your username)
+git clone https://huggingface.co/spaces/USER/music-recommender
+cd music-recommender
+
+# Copy your project files into this directory
+# Ensure Dockerfile is at the root
+# Ensure web_app/, hybrid_music_engine/, models/ folders are present
+
+# Add files
+git add .
+git commit -m "Initial commit"
+git push
+```
+
+**Using Browser:**
+Drag and drop your project files into the "Files" tab of your Space.
+
+---
+
+### STEP 5: Monitor Deployment
+
+1. Go to the **App** tab of your Space.
+2. You will see "Building" status.
+3. Click "Logs" to watch the progress.
+   - It will build the Docker image.
+   - Then it will run `download_helper.py` to fetch models.
+   - Finally, `uvicorn` will start the server.
+
+**Expected Log Success:**
+
+```
+[OK] Music Recommender API is ready!
+Application startup complete.
+```
+
+---
+
+## IMPORTANT NOTES
+
+- **Port:** The Dockerfile must expose port **7860**.
+- **Permissions:** The container runs as non-root user (ID 1000). The `Dockerfile` handles this.
+- **YouTube Fallback:** If YouTube searches fail due to IP blocking, the app will automatically return a direct link instead of an embed.
+
+---
+
+## TROUBLESHOOTING
+
+- **Build Failed?** Check the Logs tab. Common errors are missing dependencies in `web_app/requirements-deploy.txt`.
+- **Download Failed?** Verify Google Drive File IDs are public.
+- **Runtime Error?** Ensure you are not trying to write to read-only directories. Only `/app` or `/tmp` are writable.
+
+---
+
+**Author:** Graduation Project
+**Date:** 2026-01-26
+**Version:** 2.0 (Hugging Face Edition)
+  
+# SOURCE: web_app/app.py  
+"""
+Music Recommender Web API - FastAPI Backend Application.
+
+================================================================================
+PURPOSE:
+================================================================================
+This module serves as the web interface for the Music Recommendation System.
+It exposes the recommendation engine's functionality through RESTful API endpoints,
+allowing users to interact with the system via a modern web browser.
+
+================================================================================
+ARCHITECTURE:
+================================================================================
+    Frontend (HTML/CSS/JS)
+           │
+           │ HTTP/REST
+           ▼
+    FastAPI Application (this file)
+           │
+           │ Python calls
+           ▼
+    MusicRecommendationEngine
+           │
+     ┌─────┴─────┐
+     ▼           ▼
+  PyTorch    FAISS Index
+   Model     (551K songs)
+
+================================================================================
+API ENDPOINTS:
+================================================================================
+- GET /              : Serve main HTML page
+- GET /api/health    : Health check endpoint
+- GET /api/search    : Search for similar songs by name
+- GET /api/mood/{mood}      : Get recommendations by mood
+- GET /api/context/{context}: Get recommendations by activity context
+- GET /api/youtube   : Get YouTube embed URL for a song
+
+================================================================================
+FILE STRUCTURE:
+================================================================================
+- Pydantic Models: SongResult, YouTubeResult, SearchResponse
+- lifespan(): Context manager for startup/shutdown (loads model)
+- index(): Serves the main HTML page
+- search_songs(): Similarity search endpoint
+- get_by_mood(): Mood-based recommendations
+- get_by_context(): Context-based recommendations
+- get_youtube_video(): YouTube integration
+
+================================================================================
+RELATED FILES:
+================================================================================
+- templates/index.html: Frontend HTML template
+- static/css/style.css: Dark theme CSS styling
+- static/js/main.js: Frontend JavaScript logic
+- hybrid_music_engine/inference.py: MusicRecommendationEngine class
+
+================================================================================
+USAGE:
+================================================================================
+    cd web_app
+    python -m uvicorn app:app --host 127.0.0.1 --port 8000
+
+Then open: http://127.0.0.1:8000
+API Docs: http://127.0.0.1:8000/docs
+
+================================================================================
+Author: Graduation Project
+Created: 2026-01-19
+================================================================================
+"""
+
+from fastapi import FastAPI, Query, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from contextlib import asynccontextmanager
+from pydantic import BaseModel
+from typing import Optional, List
+import asyncio
+import sys
+import os
+
+# Add parent directory to path to import hybrid_music_engine
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import download helper for Vercel deployment
+try:
+    from download_helper import ensure_files_ready
+    ENABLE_AUTO_DOWNLOAD = True
+except ImportError:
+    print("⚠️  Warning: download_helper.py not found. Auto-download disabled.")
+    ENABLE_AUTO_DOWNLOAD = False
+
+from hybrid_music_engine import get_config
+from hybrid_music_engine.inference import MusicRecommendationEngine
+
+# Try to import yt_dlp, provide fallback if not available
+try:
+    import yt_dlp
+    YOUTUBE_AVAILABLE = True
+except ImportError:
+    YOUTUBE_AVAILABLE = False
+    print("[WARNING] yt-dlp not installed. YouTube features disabled.")
+
+
+# =============================================================================
+# Pydantic Models
+# =============================================================================
+
+class SongResult(BaseModel):
+    """Response model for a song result."""
+    song: str
+    artist: str
+    genre: str
+    emotion: str
+    similarity: Optional[float] = None
+
+
+class YouTubeResult(BaseModel):
+    """Response model for YouTube video."""
+    success: bool = True
+    video_id: Optional[str] = None
+    embed_url: str
+    title: str = ""
+    thumbnail: Optional[str] = None
+    message: Optional[str] = None
+
+
+class SearchResponse(BaseModel):
+    """Response model for search results."""
+    query: str
+    results: List[SongResult]
+    count: int
+
+
+# =============================================================================
+# Global Engine Instance
+# =============================================================================
+
+engine: Optional[MusicRecommendationEngine] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for FastAPI.
+    Loads the recommendation engine on startup.
+    """
+    global engine
+    print("\n" + "=" * 50)
+    print("Starting Music Recommender API...")
+    print("=" * 50)
+    
+    try:
+        # STEP 0: Check and download missing files (for Vercel deployment)
+        if ENABLE_AUTO_DOWNLOAD:
+            print("\n[0/4] Checking required files...")
+            ensure_files_ready()  # This will download missing files or exit if failed
+        
+        # Get configuration
+        config = get_config()
+        
+        # Initialize engine
+        print("[1/4] Initializing recommendation engine...")
+        engine = MusicRecommendationEngine(config)
+        
+        # Load model
+        model_path = os.path.join(config.paths.model_dir, "best_model.pth")
+        print(f"[2/4] Loading model from {model_path}...")
+        engine.load_model(model_path)
+        
+        # Load FAISS index
+        print("[3/4] Loading FAISS index...")
+        engine.load_index()
+        
+        # Load song data
+        data_path = os.path.join(config.paths.processed_data_dir, "train.csv")
+        if not os.path.exists(data_path):
+            data_path = os.path.join(config.paths.model_dir, "song_metadata.csv")
+        print(f"[4/4] Loading song data from {data_path}...")
+        engine.load_song_data(data_path)
+        
+        print("\n[OK] Music Recommender API is ready!")
+        print(f"[OK] API Docs available at: http://localhost:8000/docs")
+        print("=" * 50 + "\n")
+        
+    except Exception as e:
+        print(f"\n[ERROR] Failed to initialize engine: {e}")
+        print("[WARNING] API will start but recommendations won't work.")
+        engine = None
+    
+    yield
+    
+    # Cleanup on shutdown
+    print("\nShutting down Music Recommender API...")
+    engine = None
+
+
+# =============================================================================
+# FastAPI Application
+# =============================================================================
+
+app = FastAPI(
+    title="Music Recommender API",
+    description="API for music recommendation based on hybrid deep learning model",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Mount static files
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+
+# =============================================================================
+# Routes
+# =============================================================================
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    """Serve the main HTML page."""
+    template_path = os.path.join(os.path.dirname(__file__), "templates", "index.html")
+    try:
+        with open(template_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return HTMLResponse(
+            content="<h1>Music Recommender</h1><p>Template not found. Please create templates/index.html</p>",
+            status_code=200
+        )
+
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "engine_loaded": engine is not None,
+        "youtube_available": YOUTUBE_AVAILABLE
+    }
+
+
+@app.get("/api/search", response_model=SearchResponse)
+async def search_songs(
+    q: str = Query(..., description="Song name to search for"),
+    artist: Optional[str] = Query(None, description="Artist name (optional)")
+):
+    """
+    Search for similar songs based on song name.
+    Returns top 10 most similar songs from the database.
+    """
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Recommendation engine not initialized")
+    
+    results = engine.get_similar_songs(q, artist, top_k=10)
+    
+    if not results:
+        return SearchResponse(query=q, results=[], count=0)
+    
+    songs = [SongResult(**r) for r in results]
+    return SearchResponse(query=q, results=songs, count=len(songs))
+
+
+@app.get("/api/mood/{mood}", response_model=List[SongResult])
+async def get_by_mood(
+    mood: str,
+    limit: int = Query(10, ge=1, le=50, description="Number of results")
+):
+    """
+    Get song recommendations by mood.
+    Available moods: Happy, Sad, Energetic, Calm, Angry
+    """
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Recommendation engine not initialized")
+    
+    valid_moods = ["happy", "sad", "energetic", "calm", "angry"]
+    if mood.lower() not in valid_moods:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid mood. Available: {', '.join(valid_moods)}"
+        )
+    
+    results = engine.get_recommendations_by_mood(mood, top_k=limit)
+    return [SongResult(**r) for r in results] if results else []
+
+
+@app.get("/api/context/{context}", response_model=List[SongResult])
+async def get_by_context(
+    context: str,
+    limit: int = Query(10, ge=1, le=50, description="Number of results")
+):
+    """
+    Get song recommendations by context.
+    Available contexts: Party, Workout, Study, Relax, Driving
+    """
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Recommendation engine not initialized")
+    
+    valid_contexts = ["party", "workout", "study", "relax", "driving"]
+    if context.lower() not in valid_contexts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid context. Available: {', '.join(valid_contexts)}"
+        )
+    
+    results = engine.get_recommendations_by_context(context, top_k=limit)
+    return [SongResult(**r) for r in results] if results else []
+
+
+@app.get("/api/youtube", response_model=YouTubeResult)
+async def get_youtube_video(
+    song: str = Query(..., description="Song name"),
+    artist: str = Query(..., description="Artist name")
+):
+    """
+    Get YouTube embed URL for a song.
+    Searches YouTube for the official audio/video.
+    Falls back to YouTube search URL if server-side search is unavailable.
+    """
+    if not YOUTUBE_AVAILABLE:
+        # Fallback: return YouTube search URL
+        query = f"{song} {artist}".strip()
+        search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+        return YouTubeResult(
+            success=True,
+            video_id=None,
+            embed_url=search_url,
+            title=f"Search: {query}",
+            message="yt-dlp not installed. Click to search on YouTube."
+        )
+    
+    search_query = f"{song} {artist} official audio"
+
+    try:
+        # yt-dlp search options
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'noplaylist': True,
+            'quiet': True,
+            'default_search': 'ytsearch1',
+            'no_warnings': True,
+            'socket_timeout': 10,  # 10 second timeout
+        }
+        
+        def do_search():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # search_query is passed directly, yt-dlp handles "ytsearch1:" prefix if default_search is set
+                # or we can be explicit: f"ytsearch1:{search_query}"
+                info = ydl.extract_info(search_query, download=False)
+                return info
+        
+        # Run in thread pool to avoid blocking
+        result = await asyncio.to_thread(do_search)
+        
+        if 'entries' in result and result['entries']:
+            video = result['entries'][0]
+            video_id = video.get('id')
+            video_title = video.get('title', f"{song} - {artist}")
+            thumbnail = video.get('thumbnail', '')
+            
+            return YouTubeResult(
+                success=True,
+                video_id=video_id,
+                embed_url=f"https://www.youtube.com/embed/{video_id}",
+                title=video_title,
+                thumbnail=thumbnail
+            )
+            
+        # No results found, fallback to search URL
+        query = f"{song} {artist}".strip()
+        search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+        return YouTubeResult(
+            success=True,
+            video_id=None,
+            embed_url=search_url,
+            title=f"Search: {query}",
+            message="No exact match found. Click to search on YouTube."
+        )
+        
+    except Exception as e:
+        # Graceful fallback on any error (network, DNS, timeout, etc.)
+        print(f"[INFO] YouTube API unavailable, using search fallback: {e}")
+        query = f"{song} {artist}".strip()
+        search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+        
+        return YouTubeResult(
+            success=True,
+            video_id=None,
+            embed_url=search_url,
+            title=f"Search: {query}",
+            message="Server-side YouTube search unavailable. Click to search on YouTube."
+        )
+
+
+# =============================================================================
+# Run with: uvicorn app:app --reload --host 0.0.0.0 --port 8000
+# =============================================================================
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+  
+# SOURCE: hybrid_music_engine/inference.py  
+"""
+Inference Engine for the Hybrid Music Recommendation System.
+
+This module provides the high-level API for the web application,
+including similarity search using FAISS and recommendation functions.
+
+GPU Support:
+    - FAISS GPU provides ~50-100x faster search than CPU
+    - Install with: pip install faiss-gpu (requires CUDA)
+    - Maintains 100% accuracy (exact search)
+
+Author: Graduation Project
+Created: 2026-01-06
+"""
+
+import os
+import pickle
+from typing import Dict, List, Optional, Tuple, Union
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import torch
+
+try:
+    import faiss
+    # Check for GPU support
+    try:
+        _ = faiss.StandardGpuResources()
+        FAISS_GPU_AVAILABLE = True
+    except:
+        FAISS_GPU_AVAILABLE = False
+except ImportError:
+    faiss = None
+    FAISS_GPU_AVAILABLE = False
+    print("Warning: FAISS not installed. Install with: pip install faiss-cpu or faiss-gpu")
+
+from .logger import get_logger, log_step
+from .config import Config, get_config
+from .model import HybridMusicModel
+from .processors import TextProcessor, AudioProcessor, MetadataProcessor
+
+
+class FAISSIndex:
+    """
+    FAISS-based similarity search index for song embeddings.
+    """
+    
+    def __init__(self, config: Optional[Config] = None):
+        self.config = config or get_config()
+        self.logger = get_logger(self.config.paths.log_file)
+        
+        self.embedding_dim = self.config.faiss.embedding_dim
+        self.index = None
+        self.gpu_resources = None
+        self.song_ids: List[str] = []
+        self.idx_to_song: Dict[int, dict] = {}
+        self.using_gpu = False
+        
+        if faiss is None:
+            raise ImportError("FAISS is required. Install with: pip install faiss-cpu or faiss-gpu")
+    
+    def _try_enable_gpu(self, index: 'faiss.Index') -> 'faiss.Index':
+        if not self.config.faiss.use_gpu:
+            return index
+        
+        if not FAISS_GPU_AVAILABLE:
+            return index
+        
+        try:
+            self.gpu_resources = faiss.StandardGpuResources()
+            gpu_index = faiss.index_cpu_to_gpu(
+                self.gpu_resources,
+                self.config.faiss.gpu_id,
+                index
+            )
+            self.using_gpu = True
+            return gpu_index
+        except Exception as e:
+            self.logger.log_error(f"Failed to enable GPU: {str(e)}", "INDEX")
+            return index
+    
+    @log_step("INDEX", "Creating FAISS Index")
+    def create_index(self, embeddings: np.ndarray, song_data: pd.DataFrame) -> None:
+        embeddings = np.ascontiguousarray(embeddings.astype(np.float32))
+        
+        if self.config.faiss.use_hnsw:
+            cpu_index = faiss.IndexHNSWFlat(self.embedding_dim, self.config.faiss.hnsw_m)
+        else:
+            cpu_index = faiss.IndexFlatL2(self.embedding_dim)
+        
+        cpu_index.add(embeddings)
+        self.index = self._try_enable_gpu(cpu_index)
+        
+        self._build_mappings(song_data)
+        
+        self.logger.log("FAISS index built successfully", "INDEX", level="SUCCESS")
+
+    def _get_column_names(self, df: pd.DataFrame) -> Tuple[str, str]:
+        cols = df.columns
+        if 'song' in cols: song_col = 'song'
+        elif 'song_name' in cols: song_col = 'song_name'
+        elif 'name' in cols: song_col = 'name'
+        else: song_col = cols[0]
+            
+        if 'Artist(s)' in cols: artist_col = 'Artist(s)'
+        elif 'artist' in cols: artist_col = 'artist'
+        elif 'artists' in cols: artist_col = 'artists'
+        else: artist_col = cols[1] if len(cols) > 1 else cols[0]
+            
+        return song_col, artist_col
+
+    def _build_mappings(self, song_data: pd.DataFrame) -> None:
+        song_col, artist_col = self._get_column_names(song_data)
+        
+        for idx, row in song_data.iterrows():
+            song_info = {
+                'idx': idx,
+                'song': row.get(song_col, f'Unknown_{idx}'),
+                'artist': row.get(artist_col, 'Unknown Artist'),
+                'genre': row.get('Genre', row.get('genre', '')),
+                'emotion': row.get('emotion', ''),
+                'album': row.get('Album', row.get('album', '')),
+            }
+            # Robust ID
+            song_val = str(song_info['song']).strip()
+            artist_val = str(song_info['artist']).strip()
+            song_id = f"{artist_val}|{song_val}"
+            
+            self.song_ids.append(song_id)
+            self.idx_to_song[idx] = song_info
+
+    def search(self, query_embedding: np.ndarray, top_k: int = 10) -> List[Tuple[int, float, dict]]:
+        if self.index is None: raise ValueError("Index not loaded")
+        
+        if query_embedding.ndim == 1:
+            query_embedding = query_embedding.reshape(1, -1)
+        query_embedding = np.ascontiguousarray(query_embedding.astype(np.float32))
+        
+        distances, indices = self.index.search(query_embedding, top_k)
+        
+        results = []
+        for dist, idx in zip(distances[0], indices[0]):
+            if idx >= 0 and idx in self.idx_to_song:
+                results.append((idx, float(dist), self.idx_to_song[idx]))
+        return results
+
+    def reconstruct(self, idx: int) -> np.ndarray:
+        """
+        Reconstruct the vector for a given index from the FAISS index.
+        Crucial for Lite Deployment where we don't have the raw data to re-encode.
+        """
+        if self.index is None: raise ValueError("Index not loaded")
+        try:
+            # Check if index supports reconstruction
+            # IndexFlatL2, IndexHNSWFlat support make_direct_map() or direct access
+            # For massive indices, this might fail if not supported, but standard ones do.
+            if self.using_gpu:
+                # GPU indices might strictly not support reconstruct directly in some versions
+                # Need to copy to CPU first? Or it usually works.
+                # Let's try direct first.
+                return self.index.reconstruct(int(idx))
+            else:
+                return self.index.reconstruct(int(idx))
+        except Exception as e:
+            self.logger.log_error(f"Failed to reconstruct vector {idx}: {e}", "INDEX")
+            # If reconstruction fails, we return zeros (will yield bad results but no crash)
+            return np.zeros(self.embedding_dim, dtype=np.float32)
+
+    def save(self, path: Optional[str] = None) -> None:
+        path = path or self.config.paths.faiss_index_path
+        index_to_save = self.index
+        if self.using_gpu:
+            index_to_save = faiss.index_gpu_to_cpu(self.index)
+        
+        faiss.write_index(index_to_save, str(path))
+        with open(str(path) + '.mappings.pkl', 'wb') as f:
+            pickle.dump({'song_ids': self.song_ids, 'idx_to_song': self.idx_to_song}, f)
+        self.logger.log(f"Index saved to {path}", "INDEX", level="SUCCESS")
+
+    def load(self, path: Optional[str] = None) -> None:
+        path = path or self.config.paths.faiss_index_path
+        cpu_index = faiss.read_index(str(path))
+        # Important: For reconstruction to work reliably on some index types,
+        # we might need to ensure it has potential direct map. 
+        # But IndexFlatL2 (default) always supports it.
+        self.index = self._try_enable_gpu(cpu_index)
+        
+        mappings_path = str(path) + '.mappings.pkl'
+        if os.path.exists(mappings_path):
+            with open(mappings_path, 'rb') as f:
+                mappings = pickle.load(f)
+            self.song_ids = mappings['song_ids']
+            self.idx_to_song = mappings['idx_to_song']
+        self.logger.log(f"Index loaded from {path}", "INDEX", level="SUCCESS")
+
+
+class MusicRecommendationEngine:
+    """
+    High-level inference engine for music recommendations.
+    """
+    
+    def __init__(self, config: Optional[Config] = None):
+        self.config = config or get_config()
+        self.logger = get_logger(self.config.paths.log_file)
+        
+        self.model: Optional[HybridMusicModel] = None
+        self.faiss_index: Optional[FAISSIndex] = None
+        
+        self.text_processor = TextProcessor(config)
+        self.audio_processor = AudioProcessor(config)
+        self.metadata_processor = MetadataProcessor(config)
+        
+        self.song_data: Optional[pd.DataFrame] = None
+        
+        device_str = self.config.training.get_device()
+        self.device = torch.device(device_str)
+        self.logger.log("Engine initialized", "INFERENCE")
+    
+    @log_step("MODEL", "Loading Model")
+    def load_model(self, model_path: str) -> None:
+        self.model = HybridMusicModel(self.config)
+        self.model.load(model_path, device=str(self.device))
+        self.model.to(self.device)
+        self.model.eval()
+    
+    @log_step("INDEX", "Loading Index")
+    def load_index(self, index_path: Optional[str] = None) -> None:
+        self.faiss_index = FAISSIndex(self.config)
+        self.faiss_index.load(index_path)
+    
+    @log_step("DATA", "Loading Song Database")
+    def load_song_data(self, data_path: str) -> None:
+        path = Path(data_path)
+        if path.suffix == '.csv':
+            self.song_data = pd.read_csv(data_path)
+        elif path.suffix in ['.json', '.jsonl']:
+            self.song_data = pd.read_json(data_path, lines=path.suffix == '.jsonl')
+        
+        # Init processors on this data
+        # Note: If song_metadata.csv is used (Lite Mode), it lacks columns.
+        # Processors usually fit on 'text', 'genre' etc.
+        # We try to fit anyway, but handle potential missing columns gracefully in transform.
+        try:
+            self.audio_processor.fit(self.song_data)
+            self.metadata_processor.fit(self.song_data)
+        except Exception as e:
+            self.logger.log(f"Processor fit warning (Lite Mode?): {e}", "DATA", level="WARNING")
+        
+        self.logger.log(f"Loaded {len(self.song_data)} songs", "DATA", level="SUCCESS")
+
+    def _get_column_names(self) -> Tuple[str, str]:
+        cols = self.song_data.columns
+        if 'song' in cols: song_col = 'song'
+        elif 'song_name' in cols: song_col = 'song_name'
+        elif 'name' in cols: song_col = 'name'
+        else: song_col = cols[0]
+            
+        if 'Artist(s)' in cols: artist_col = 'Artist(s)'
+        elif 'artist' in cols: artist_col = 'artist'
+        elif 'artists' in cols: artist_col = 'artists'
+        else: artist_col = cols[1] if len(cols) > 1 else cols[0]
+        return song_col, artist_col
+
+    def _find_song(self, song_name: str, artist_name: Optional[str] = None) -> Optional[pd.Series]:
+        if self.song_data is None: return None
+        
+        song_col, artist_col = self._get_column_names()
+        
+        # Exact match
+        mask = self.song_data[song_col].fillna('').astype(str).str.lower() == song_name.lower()
+        
+        if artist_name:
+            artist_mask = self.song_data[artist_col].fillna('').astype(str).str.lower().str.contains(artist_name.lower(), na=False)
+            mask = mask & artist_mask
+        
+        matches = self.song_data[mask]
+        if len(matches) > 0: return matches.iloc[0]
+        
+        # Fuzzy match
+        mask = self.song_data[song_col].fillna('').astype(str).str.lower().str.contains(song_name.lower(), na=False)
+        matches = self.song_data[mask]
+        if len(matches) > 0: return matches.iloc[0]
+        
+        return None
+
+    def _encode_song(self, song_row: pd.Series) -> torch.Tensor:
+        if self.model is None: raise ValueError("Model not loaded")
+        
+        lyrics_col = 'text' if 'text' in song_row.index else 'lyrics'
+        lyrics = self.text_processor.clean_lyrics(song_row.get(lyrics_col, ""))
+        emotion = str(song_row.get('emotion', ''))
+        genre = str(song_row.get('Genre', song_row.get('genre', '')))
+        
+        combined_text = self.text_processor.combine_text_features(lyrics, emotion, genre)
+        text_encoded = self.text_processor.tokenize_single(combined_text)
+        
+        # Audio features might be missing in Lite Mode
+        try:
+            audio_features = self.audio_processor.transform(pd.DataFrame([song_row]))
+        except:
+            # Fallback to zeros if columns missing
+            audio_features = torch.zeros((1, 11))
+        
+        inputs = {
+            'input_ids': text_encoded['input_ids'].to(self.device),
+            'attention_mask': text_encoded['attention_mask'].to(self.device),
+            'token_type_ids': text_encoded['token_type_ids'].to(self.device),
+            'audio_features': audio_features.to(self.device),
+        }
+        
+        with torch.no_grad():
+            embedding = self.model.get_embedding(**inputs)
+        return embedding.cpu()
+
+    @log_step("INFERENCE", "Getting Similar Songs")
+    def get_similar_songs(self, song_name: str, artist_name: Optional[str] = None, top_k: int = 5) -> List[Dict]:
+        song_row = self._find_song(song_name, artist_name)
+        if song_row is None:
+            self.logger.log(f"Song not found: {song_name}", "INFERENCE", level="WARNING")
+            return []
+        
+        if self.faiss_index is None: raise ValueError("Index not loaded")
+        
+        # OPTIMIZATION: Use pre-computed vector from FAISS if possible
+        # This ensures 100% accuracy even if using song_metadata.csv (which lacks features)
+        try:
+            # Assuming dataframe index matches FAISS index ID
+            # This is true if song_metadata.csv is a direct subset of training data without shuffle
+            song_idx = int(song_row.name)
+            embedding_np = self.faiss_index.reconstruct(song_idx)
+            
+            # Verify if reconstruction looks valid (not all zeros)
+            if np.all(embedding_np == 0):
+                self.logger.log("Reconstructed vector is all zeros, falling back to encoding", "INFERENCE")
+                embedding = self._encode_song(song_row)
+                embedding_np = embedding.numpy().squeeze()
+            else:
+                self.logger.log(f"Using pre-computed vector for ID {song_idx}", "INFERENCE")
+                
+        except Exception as e:
+            self.logger.log(f"Vector reconstruction failed ({e}), encoding from scratch", "INFERENCE")
+            embedding = self._encode_song(song_row)
+            embedding_np = embedding.numpy().squeeze()
+        
+        # Search more for filtering
+        candidates_k = top_k * 3
+        results = self.faiss_index.search(embedding_np, candidates_k + 1)
+        
+        # Post-processing filters: Strict Emotion Logic
+        query_emotion = song_row.get('emotion', '').lower()
+        compatible_emotions = {
+            'joy': ['joy', 'love', 'surprise', 'anger'],
+            'sadness': ['sadness', 'love', 'fear'], 
+            'anger': ['anger', 'joy', 'fear'],
+            'love': ['love', 'joy', 'sadness'],
+            'fear': ['fear', 'sadness', 'anger'],
+            'surprise': ['surprise', 'joy']
+        }
+        allowed_emotions = compatible_emotions.get(query_emotion, [])
+        if not allowed_emotions and query_emotion: allowed_emotions = [query_emotion]
+            
+        recommendations = []
+        song_col, _ = self._get_column_names()
+        query_song_name = str(song_row.get(song_col, '')).lower()
+        
+        for idx, distance, song_info in results:
+            if str(song_info['song']).lower() == query_song_name: continue
+            
+            # Emotion Filter
+            cand_emotion = song_info.get('emotion', '').lower()
+            if allowed_emotions and cand_emotion and cand_emotion not in allowed_emotions:
+                continue
+            
+            similarity = 1.0 / (1.0 + distance)
+            recommendations.append({
+                'song': song_info['song'],
+                'artist': song_info['artist'],
+                'similarity': round(similarity, 4),
+                'genre': song_info.get('genre', ''),
+                'emotion': song_info.get('emotion', ''),
+                'album': song_info.get('album', '')
+            })
+            if len(recommendations) >= top_k: break
+        
+        # Fallback
+        if len(recommendations) == 0:
+            for idx, distance, song_info in results[:top_k+1]:
+                 if str(song_info['song']).lower() == query_song_name: continue
+                 similarity = 1.0 / (1.0 + distance)
+                 recommendations.append({
+                    'song': song_info['song'],
+                    'artist': song_info['artist'],
+                    'similarity': round(similarity, 4),
+                    'genre': song_info.get('genre', ''),
+                    'emotion': song_info.get('emotion', ''),
+                    'album': song_info.get('album', '')
+                })
+        
+        return recommendations
+
+    def get_recommendations_by_mood(self, mood: str, top_k: int = 10) -> List[Dict]:
+        if self.song_data is None: return []
+        
+        mood_mapping = {
+            'happy': {'emotion': ['joy'], 'valence': (0.6, 1.0), 'energy': (0.5, 1.0)},
+            'sad': {'emotion': ['sadness'], 'valence': (0.0, 0.4), 'energy': (0.0, 0.5)},
+            'energetic': {'emotion': ['joy'], 'valence': (0.5, 1.0), 'energy': (0.7, 1.0)},
+            'calm': {'emotion': [], 'valence': (0.4, 0.7), 'energy': (0.0, 0.4)},
+            'angry': {'emotion': ['anger'], 'valence': (0.0, 0.4), 'energy': (0.7, 1.0)},
+        }
+        
+        mood_lower = mood.lower()
+        if mood_lower not in mood_mapping: mood_lower = 'happy'
+        filters = mood_mapping[mood_lower]
+        filtered = self.song_data.copy()
+        
+        if filters['emotion'] and 'emotion' in filtered.columns:
+            filtered = filtered[filtered['emotion'].isin(filters['emotion'])]
+        if 'valence' in filtered.columns:
+            filtered = filtered[(filtered['valence'] >= filters['valence'][0]) & (filtered['valence'] <= filters['valence'][1])]
+        if 'energy' in filtered.columns:
+            filtered = filtered[(filtered['energy'] >= filters['energy'][0]) & (filtered['energy'] <= filters['energy'][1])]
+        
+        if 'Popularity' in filtered.columns:
+            filtered = filtered.sort_values('Popularity', ascending=False)
+            
+        song_col, artist_col = self._get_column_names()
+        recommendations = []
+        for _, row in filtered.head(top_k).iterrows():
+            recommendations.append({
+                'song': row.get(song_col, ''),
+                'artist': row.get(artist_col, ''),
+                'genre': row.get('Genre', row.get('genre', '')),
+                'emotion': row.get('emotion', ''),
+            })
+        return recommendations
+
+    def get_recommendations_by_context(self, context: str, top_k: int = 10) -> List[Dict]:
+        if self.song_data is None: return []
+        # (Simplified context logic)
+        return self.get_recommendations_by_mood('happy', top_k)
+
+    def build_index(self, data_path: str, save_path: Optional[str] = None) -> None:
+        self.load_song_data(data_path)
+        if self.model is None: raise ValueError("Model not loaded")
+        
+        all_embeddings = []
+        batch_size = self.config.training.batch_size
+        self.model.eval()
+        with torch.no_grad():
+            for i in range(0, len(self.song_data), batch_size):
+                batch_data = self.song_data.iloc[i:i+batch_size]
+                batch_embeddings = []
+                for _, row in batch_data.iterrows():
+                    try:
+                        emb = self._encode_song(row)
+                        batch_embeddings.append(emb.numpy().squeeze())
+                    except:
+                        batch_embeddings.append(np.zeros(64))
+                all_embeddings.extend(batch_embeddings)
+        
+        self.embeddings = np.array(all_embeddings, dtype=np.float32)
+        self.faiss_index = FAISSIndex(self.config)
+        self.faiss_index.create_index(self.embeddings, self.song_data)
+        if save_path: self.faiss_index.save(save_path)
+
+def create_engine(model_path: str, index_path: str, data_path: str, config: Optional[Config] = None) -> MusicRecommendationEngine:
+    engine = MusicRecommendationEngine(config)
+    engine.load_model(model_path)
+    engine.load_index(index_path)
+    engine.load_song_data(data_path)
+    return engine

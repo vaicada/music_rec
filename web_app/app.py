@@ -70,7 +70,7 @@ Created: 2026-01-19
 ================================================================================
 """
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
@@ -88,7 +88,7 @@ try:
     from download_helper import ensure_files_ready
     ENABLE_AUTO_DOWNLOAD = True
 except ImportError:
-    print("⚠️  Warning: download_helper.py not found. Auto-download disabled.")
+    print("[WARNING] download_helper.py not found. Auto-download disabled.")
     ENABLE_AUTO_DOWNLOAD = False
 
 from hybrid_music_engine import get_config
@@ -101,6 +101,31 @@ try:
 except ImportError:
     YOUTUBE_AVAILABLE = False
     print("[WARNING] yt-dlp not installed. YouTube features disabled.")
+
+
+# Try to import ImageMoodClassifier for image-based recommendation
+try:
+    from hybrid_music_engine.image_processor import ImageMoodClassifier, is_clip_available
+    IMAGE_PROCESSOR_AVAILABLE = is_clip_available()
+except ImportError as e:
+    IMAGE_PROCESSOR_AVAILABLE = False
+    print(f"[WARNING] ImageMoodClassifier import failed: {e}. Image-based recommendation disabled.")
+
+# Try to import SpotifyClient for enriched search and album art
+try:
+    from spotify_client import SpotifyClient
+    SPOTIFY_CLIENT_AVAILABLE = True
+except ImportError as e:
+    SPOTIFY_CLIENT_AVAILABLE = False
+    print(f"[WARNING] SpotifyClient import failed: {e}. Spotify enrichment disabled.")
+
+# Try to import CLIPAudioBridge for Model 2 image recommendations
+try:
+    from audio_model.clip_audio_bridge import CLIPAudioBridge
+    AUDIO_BRIDGE_AVAILABLE = True
+except ImportError as e:
+    AUDIO_BRIDGE_AVAILABLE = False
+    print(f"[WARNING] CLIPAudioBridge import failed: {e}. Model 2 image recommendation disabled.")
 
 
 # =============================================================================
@@ -133,11 +158,24 @@ class SearchResponse(BaseModel):
     count: int
 
 
+class ImageRecommendationResponse(BaseModel):
+    """Response model for image-based recommendation."""
+    success: bool
+    detected_label: str = ""
+    detected_type: str = ""
+    confidence: float = 0.0
+    recommendations: Optional[List[SongResult]] = None
+    message: str = ""
+
+
 # =============================================================================
 # Global Engine Instance
 # =============================================================================
 
 engine: Optional[MusicRecommendationEngine] = None
+image_classifier: Optional[ImageMoodClassifier] = None
+spotify_client: Optional["SpotifyClient"] = None
+audio_bridge: Optional["CLIPAudioBridge"] = None
 
 
 @asynccontextmanager
@@ -146,7 +184,7 @@ async def lifespan(app: FastAPI):
     Lifespan context manager for FastAPI.
     Loads the recommendation engine on startup.
     """
-    global engine
+    global engine, image_classifier, spotify_client, audio_bridge
     print("\n" + "=" * 50)
     print("Starting Music Recommender API...")
     print("=" * 50)
@@ -182,6 +220,38 @@ async def lifespan(app: FastAPI):
         
         print("\n[OK] Music Recommender API is ready!")
         print(f"[OK] API Docs available at: http://localhost:8000/docs")
+        
+        # Initialize image classifier (lazy load - model downloads on first use)
+        if IMAGE_PROCESSOR_AVAILABLE:
+            print("[INFO] Image-based recommendation is available (CLIP will load on first use)")
+            image_classifier = ImageMoodClassifier()
+        else:
+            print("[INFO] Image-based recommendation is disabled (CLIP not available)")
+
+        # Initialize Spotify client (non-blocking, graceful fallback)
+        if SPOTIFY_CLIENT_AVAILABLE:
+            try:
+                spotify_client = SpotifyClient()
+                # Quick token test (doesn't call data endpoints)
+                spotify_client._get_token()
+                print("[OK] Spotify API client initialized")
+            except Exception as spotify_err:
+                print(f"[WARNING] Spotify API init failed: {spotify_err}. Spotify features disabled.")
+                spotify_client = None
+        else:
+            print("[INFO] Spotify client not available")
+
+        # Initialize CLIPAudioBridge for Model 2 (optional - requires trained model)
+        if AUDIO_BRIDGE_AVAILABLE:
+            try:
+                audio_bridge = CLIPAudioBridge()
+                print("[OK] Model 2 (Audio-Only) CLIP bridge initialized")
+            except Exception as m2_err:
+                print(f"[INFO] Model 2 not ready yet: {m2_err}. Train first.")
+                audio_bridge = None
+        else:
+            print("[INFO] Model 2 CLIP bridge not available")
+
         print("=" * 50 + "\n")
         
     except Exception as e:
@@ -194,6 +264,9 @@ async def lifespan(app: FastAPI):
     # Cleanup on shutdown
     print("\nShutting down Music Recommender API...")
     engine = None
+    image_classifier = None
+    spotify_client = None
+    audio_bridge = None
 
 
 # =============================================================================
@@ -211,6 +284,8 @@ app = FastAPI(
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+
 
 
 # =============================================================================
@@ -237,14 +312,86 @@ async def health_check():
     return {
         "status": "healthy",
         "engine_loaded": engine is not None,
-        "youtube_available": YOUTUBE_AVAILABLE
+        "youtube_available": YOUTUBE_AVAILABLE,
+        "spotify_available": spotify_client is not None
     }
+
+
+@app.get("/api/autocomplete")
+async def autocomplete(
+    q: str = Query(..., description="Query prefix"),
+    model: str = Query("model1", description="Recommendation model (model1 or model2)")
+):
+    """
+    Autocomplete song names from the dataset.
+    Returns up to 8 matching songs.
+    """
+    query = q.lower().strip()
+    if not query:
+        return []
+
+    # --- Mode 2: Audio Only ---
+    if model == "model2":
+        if audio_bridge is None or getattr(audio_bridge, 'mappings', None) is None:
+            return []
+            
+        unique_songs = []
+        seen = set()
+        
+        for meta in audio_bridge.mappings:
+            song_name = str(meta.get("song", "")).strip()
+            if song_name.lower().startswith(query):
+                artist_name = str(meta.get("artist", "")).strip()
+                key = f"{song_name}::{artist_name}".lower()
+                
+                if key not in seen:
+                    seen.add(key)
+                    unique_songs.append({
+                        "song": song_name,
+                        "artist": artist_name
+                    })
+                    
+                    if len(unique_songs) >= 8:
+                        break
+        return unique_songs
+
+    # --- Mode 1: Hybrid ---
+    if engine is None or engine.song_data is None:
+        return []
+        
+    song_col, artist_col = engine._get_column_names()
+    
+    # Prefix match
+    mask = engine.song_data[song_col].str.lower().str.startswith(query, na=False)
+    matches = engine.song_data[mask]
+    
+    unique_songs = []
+    seen = set()
+    
+    for _, row in matches.head(30).iterrows():
+        song_name = str(row.get(song_col, ''))
+        artist_name = str(row.get(artist_col, ''))
+        
+        # Deduplicate
+        key = f"{song_name}::{artist_name}".lower()
+        if key not in seen:
+            seen.add(key)
+            unique_songs.append({
+                "song": song_name,
+                "artist": artist_name
+            })
+            
+            if len(unique_songs) >= 8:
+                break
+                
+    return unique_songs
 
 
 @app.get("/api/search", response_model=SearchResponse)
 async def search_songs(
     q: str = Query(..., description="Song name to search for"),
-    artist: Optional[str] = Query(None, description="Artist name (optional)")
+    artist: Optional[str] = Query(None, description="Artist name (optional)"),
+    model: str = Query("model1", description="Recommendation model (model1 or model2)")
 ):
     """
     Search for similar songs based on song name.
@@ -253,7 +400,15 @@ async def search_songs(
     if engine is None:
         raise HTTPException(status_code=503, detail="Recommendation engine not initialized")
     
-    results = engine.get_similar_songs(q, artist, top_k=10)
+    if model == "model2":
+        if audio_bridge is None:
+            raise HTTPException(status_code=503, detail="Model 2 (Audio-Only) not available")
+        # Run in thread since recommend_from_song isn't async
+        m2_res = await asyncio.to_thread(audio_bridge.recommend_from_song, q, artist, 10)
+        results = m2_res["recommendations"] if m2_res else []
+    else:
+        # Run Model 1 in thread just in case it blocks
+        results = await asyncio.to_thread(engine.get_similar_songs, q, artist, 10)
     
     if not results:
         return SearchResponse(query=q, results=[], count=0)
@@ -306,6 +461,50 @@ async def get_by_context(
     
     results = engine.get_recommendations_by_context(context, top_k=limit)
     return [SongResult(**r) for r in results] if results else []
+
+
+
+# =============================================================================
+# Spotify Enrich Endpoint - returns album art + Spotify metadata for any song
+# =============================================================================
+
+@app.get("/api/spotify-enrich")
+async def spotify_enrich(
+    q: str = Query(..., description="Song name"),
+    artist: Optional[str] = Query(None, description="Artist name (optional)")
+):
+    """
+    Get Spotify metadata (album art, Spotify URL, popularity) for a given song.
+
+    Used by the frontend to enrich song cards with album art after Model 1
+    returns recommendations. Makes one Spotify Search API call per song.
+
+    Returns:
+        { found: bool, album_art, spotify_url, popularity, artist, album }
+    """
+    if spotify_client is None:
+        return {"found": False, "reason": "Spotify client not available"}
+
+    try:
+        track = await asyncio.to_thread(spotify_client.search_track, q, artist)
+        if not track:
+            return {"found": False, "reason": "Song not found on Spotify"}
+
+        return {
+            "found": True,
+            "song": track["name"],
+            "artist": track["artist"],
+            "album": track["album"],
+            "album_art": track["album_art"],
+            "spotify_url": track["spotify_url"],
+            "popularity": track["popularity"],
+            "preview_url": track.get("preview_url"),
+            "duration_ms": track["duration_ms"],
+            "explicit": track["explicit"],
+        }
+    except Exception as e:
+        print(f"[WARNING] spotify-enrich error: {e}")
+        return {"found": False, "reason": str(e)}
 
 
 @app.get("/api/youtube", response_model=YouTubeResult)
@@ -390,6 +589,197 @@ async def get_youtube_video(
             embed_url=search_url,
             title=f"Search: {query}",
             message="Server-side YouTube search unavailable. Click to search on YouTube."
+        )
+
+
+# =============================================================================
+# Image-Based Recommendation Endpoint
+# =============================================================================
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
+
+
+@app.post("/api/recommend-from-image", response_model=ImageRecommendationResponse)
+async def recommend_from_image(
+    file: UploadFile = File(..., description="Image file (JPEG, PNG, WebP, GIF)")
+):
+    """
+    Get music recommendations based on an uploaded image.
+    
+    The system uses CLIP (Contrastive Language-Image Pre-training) to analyze
+    the image and detect:
+    - Mood: Happy, Sad, Energetic, Calm, Angry
+    - Context: Party, Workout, Study, Relax, Driving
+    
+    Then returns appropriate music recommendations.
+    
+    **Supported formats**: JPEG, PNG, WebP, GIF
+    **Max file size**: 10MB
+    """
+    # Check if image processor is available
+    if not IMAGE_PROCESSOR_AVAILABLE or image_classifier is None:
+        return ImageRecommendationResponse(
+            success=False,
+            message="Image-based recommendation is not available. CLIP model not installed."
+        )
+    
+    if engine is None:
+        return ImageRecommendationResponse(
+            success=False,
+            message="Recommendation engine not initialized."
+        )
+    
+    # Validate file type
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        return ImageRecommendationResponse(
+            success=False,
+            message=f"Invalid file type: {content_type}. Allowed: JPEG, PNG, WebP, GIF"
+        )
+    
+    # Read file content
+    try:
+        image_bytes = await file.read()
+        
+        # Check file size
+        if len(image_bytes) > MAX_IMAGE_SIZE:
+            return ImageRecommendationResponse(
+                success=False,
+                message=f"File too large. Maximum size: 10MB"
+            )
+        
+        # Analyze image with CLIP
+        label, label_type, confidence = await asyncio.to_thread(
+            image_classifier.analyze_image, image_bytes
+        )
+        
+        # Get recommendations based on detected mood or context
+        if label_type == "mood":
+            results = engine.get_recommendations_by_mood(label, top_k=10)
+        else:  # context
+            results = engine.get_recommendations_by_context(label, top_k=10)
+        
+        if not results:
+            return ImageRecommendationResponse(
+                success=True,
+                detected_label=label,
+                detected_type=label_type,
+                confidence=confidence,
+                recommendations=[],
+                message=f"Detected {label} ({label_type}), but no matching songs found."
+            )
+        
+        return ImageRecommendationResponse(
+            success=True,
+            detected_label=label,
+            detected_type=label_type,
+            confidence=confidence,
+            recommendations=[SongResult(**r) for r in results],
+            message=f"Detected: {label} ({label_type}) with {confidence:.0%} confidence"
+        )
+        
+    except ValueError as e:
+        return ImageRecommendationResponse(
+            success=False,
+            message=f"Could not process image: {str(e)}"
+        )
+    except Exception as e:
+        print(f"[ERROR] Image analysis failed: {e}")
+        return ImageRecommendationResponse(
+            success=False,
+            message="An error occurred while analyzing the image. Please try again."
+        )
+
+
+# =============================================================================
+# Image-Based Recommendation v2 Endpoint (Model 2 - Audio-Only + CLIP Bridge)
+# =============================================================================
+
+@app.post("/api/recommend/image-v2", response_model=ImageRecommendationResponse)
+async def recommend_from_image_v2(
+    file: UploadFile = File(..., description="Image file (JPEG, PNG, WebP, GIF)")
+):
+    """
+    Get music recommendations using Model 2 (Audio-Only) based on an uploaded image.
+
+    Pipeline:
+      Image → CLIP (mood/context detection) → Audio Profile →
+      Model 2 encode (32D) → FAISS search → top 10 songs
+
+    Compared to /api/recommend-from-image (Model 1 Hybrid), this endpoint
+    uses purely audio features without lyrics/text, giving a different
+    audio-characteristic-based recommendation.
+    """
+    # Check if audio bridge is available (requires trained Model 2)
+    if audio_bridge is None:
+        return ImageRecommendationResponse(
+            success=False,
+            message="Model 2 (Audio-Only) is not available. The model may not be trained yet."
+        )
+
+    if not IMAGE_PROCESSOR_AVAILABLE or image_classifier is None:
+        return ImageRecommendationResponse(
+            success=False,
+            message="CLIP model not available. Image-based recommendation disabled."
+        )
+
+    # Validate file type
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        return ImageRecommendationResponse(
+            success=False,
+            message=f"Invalid file type: {content_type}. Allowed: JPEG, PNG, WebP, GIF"
+        )
+
+    try:
+        image_bytes = await file.read()
+
+        if len(image_bytes) > MAX_IMAGE_SIZE:
+            return ImageRecommendationResponse(
+                success=False,
+                message="File too large. Maximum size: 10MB"
+            )
+
+        # Step 1: Use CLIP to detect mood/context from the image (same as Model 1)
+        label, label_type, confidence = await asyncio.to_thread(
+            image_classifier.analyze_image, image_bytes
+        )
+
+        # Step 2: Pass detected label through Audio Bridge → Model 2 → FAISS
+        results = await asyncio.to_thread(
+            audio_bridge.recommend_from_label, label, 10
+        )
+
+        if not results:
+            return ImageRecommendationResponse(
+                success=True,
+                detected_label=label,
+                detected_type=label_type,
+                confidence=confidence,
+                recommendations=[],
+                message=f"Detected {label} ({label_type}), but no matching songs found."
+            )
+
+        return ImageRecommendationResponse(
+            success=True,
+            detected_label=label,
+            detected_type=label_type,
+            confidence=confidence,
+            recommendations=[SongResult(**r) for r in results],
+            message=f"[Model 2] Detected: {label} ({label_type}) with {confidence:.0%} confidence"
+        )
+
+    except ValueError as e:
+        return ImageRecommendationResponse(
+            success=False,
+            message=f"Could not process image: {str(e)}"
+        )
+    except Exception as e:
+        print(f"[ERROR] Image v2 analysis failed: {e}")
+        return ImageRecommendationResponse(
+            success=False,
+            message="An error occurred while analyzing the image. Please try again."
         )
 
 

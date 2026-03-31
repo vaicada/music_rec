@@ -24,3 +24,7 @@ gdown>=5.2.0
 
 # YouTube Integration
 yt-dlp>=2023.11.16
+
+# Spotify API
+python-dotenv>=1.0.0
+requests>=2.31.0
