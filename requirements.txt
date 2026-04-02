@@ -28,3 +28,9 @@ yt-dlp>=2023.11.16
 # Spotify API
 python-dotenv>=1.0.0
 requests>=2.31.0
+
+# File upload support (required by FastAPI UploadFile / multipart form endpoints)
+python-multipart>=0.0.6
+
+# Image processing
+pillow>=10.0.0
