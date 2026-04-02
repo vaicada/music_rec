@@ -108,6 +108,7 @@ try:
     from hybrid_music_engine.image_processor import ImageMoodClassifier, is_clip_available
     IMAGE_PROCESSOR_AVAILABLE = is_clip_available()
 except ImportError as e:
+    ImageMoodClassifier = None  # type: ignore[assignment,misc]
     IMAGE_PROCESSOR_AVAILABLE = False
     print(f"[WARNING] ImageMoodClassifier import failed: {e}. Image-based recommendation disabled.")
 
@@ -116,6 +117,7 @@ try:
     from spotify_client import SpotifyClient
     SPOTIFY_CLIENT_AVAILABLE = True
 except ImportError as e:
+    SpotifyClient = None  # type: ignore[assignment,misc]
     SPOTIFY_CLIENT_AVAILABLE = False
     print(f"[WARNING] SpotifyClient import failed: {e}. Spotify enrichment disabled.")
 
@@ -124,6 +126,7 @@ try:
     from audio_model.clip_audio_bridge import CLIPAudioBridge
     AUDIO_BRIDGE_AVAILABLE = True
 except ImportError as e:
+    CLIPAudioBridge = None  # type: ignore[assignment,misc]
     AUDIO_BRIDGE_AVAILABLE = False
     print(f"[WARNING] CLIPAudioBridge import failed: {e}. Model 2 image recommendation disabled.")
 
