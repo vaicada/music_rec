@@ -1,3 +1,11 @@
+---
+title: Hybrid Music Recommender
+emoji: 🎶
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+pinned: false
+---
 <div align="center">
   <h1>🎶 Hybrid Music Recommendation Engine</h1>
   <p>A cutting-edge, dual-model AI system that recommends music based on lyrics, audio features, visual moods, and context.</p>
