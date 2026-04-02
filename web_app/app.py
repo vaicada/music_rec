@@ -83,13 +83,17 @@ import os
 # Add parent directory to path to import hybrid_music_engine
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import download helper for Vercel deployment
+# Import download helper (try both relative and package paths)
 try:
     from download_helper import ensure_files_ready
     ENABLE_AUTO_DOWNLOAD = True
 except ImportError:
-    print("[WARNING] download_helper.py not found. Auto-download disabled.")
-    ENABLE_AUTO_DOWNLOAD = False
+    try:
+        from web_app.download_helper import ensure_files_ready
+        ENABLE_AUTO_DOWNLOAD = True
+    except ImportError:
+        print("[WARNING] download_helper.py not found. Auto-download disabled.")
+        ENABLE_AUTO_DOWNLOAD = False
 
 from hybrid_music_engine import get_config
 from hybrid_music_engine.inference import MusicRecommendationEngine
