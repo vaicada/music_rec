@@ -109,3 +109,7 @@ desktop.ini
 *.bak
 
 models/bert_cache/
+
+# ----- Visualizations (local only, not needed on HF) -----
+visualizations/
+NotebookLM_Source_Files/
