@@ -29,9 +29,10 @@ class AudioOnlyConfig:
         'acousticness', 'instrumentalness', 'speechiness', 'liveness', 'key'
     ])
 
-    # Model architecture – Autoencoder: 9 -> 16 -> 32 (bottleneck) -> 16 -> 9
+    # Model architecture – Autoencoder: 9 -> 16 -> 8 (bottleneck) -> 16 -> 9
+    # SVD analysis showed 99% energy in 7 dims → dim=8 is optimal bottleneck
     input_dim: int = 9
-    output_dim: int = 32      # Bottleneck / Latent space dimension (same as before)
+    output_dim: int = 8       # Bottleneck / Latent space dimension (reduced from 32)
     dropout: float = 0.1
 
     # Training  (large dataset -> large batch / fewer epochs)

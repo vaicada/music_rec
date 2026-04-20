@@ -34,3 +34,19 @@ python-multipart>=0.0.6
 
 # Image processing
 pillow>=10.0.0
+
+# =============================================================================
+# Auth & Database (User Auth + Search History + Playlists)
+# =============================================================================
+
+# Database ORM
+sqlalchemy>=2.0.0
+
+# PostgreSQL driver
+psycopg2-binary>=2.9.0
+
+# JWT Authentication
+python-jose[cryptography]>=3.3.0
+
+# Password hashing
+passlib[bcrypt]>=1.7.4

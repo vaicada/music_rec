@@ -113,3 +113,11 @@ models/bert_cache/
 # ----- Visualizations (local only, not needed on HF) -----
 visualizations/
 NotebookLM_Source_Files/
+
+# ----- SQLite Database (local dev only, PostgreSQL used in prod) -----
+*.db
+*.sqlite
+*.sqlite3
+
+# ----- Agent config (local tooling) -----
+.agent/

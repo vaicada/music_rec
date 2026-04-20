@@ -2,7 +2,7 @@
 Build FAISS index for Audio Autoencoder (Model 2) using tracks_features.csv data.
 
 Loads the trained AudioAutoencoder, encodes ALL songs from the 1.2M dataset into
-32-dimensional L2-normalised embeddings, builds a FAISS IndexFlatIP, and saves:
+8-dimensional raw embeddings, builds a FAISS IndexFlatL2, and saves:
   - models/tracks_faiss.index
   - models/tracks_faiss.index.mappings.pkl
 
@@ -50,7 +50,7 @@ def build_index(
     batch_size: int = 4096,
     device_str: str = "cpu",
 ):
-    """Encode all songs and build a FAISS IndexFlatIP from the latent embeddings."""
+    """Encode all songs and build a FAISS IndexFlatL2 from the latent embeddings."""
 
     device = torch.device(device_str)
     print(f"[build_faiss] Device: {device}")
@@ -86,8 +86,8 @@ def build_index(
     print(f"[build_faiss] Embeddings shape: {embeddings.shape}")
 
     # ── Build FAISS index ─────────────────────────────────────────────────────
-    print("[build_faiss] Building FAISS IndexFlatIP ...")
-    index = faiss.IndexFlatIP(latent_dim)   # Inner product == cosine for L2-normed vectors
+    print("[build_faiss] Building FAISS IndexFlatL2 ...")
+    index = faiss.IndexFlatL2(latent_dim)   # L2 distance for raw (non-normalized) embeddings
     index.add(embeddings)
     print(f"[build_faiss] FAISS index total vectors: {index.ntotal:,}")
 

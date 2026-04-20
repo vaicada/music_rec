@@ -2,8 +2,8 @@
 Audio Autoencoder (Model 2).
 
 Architecture:
-    ENCODER:  Input(9) -> FC(16) -> GELU -> FC(32)  [Bottleneck / Latent]
-    DECODER:  Input(32) -> FC(16) -> GELU -> FC(9)   [Reconstruction]
+    ENCODER:  Input(9) -> FC(16) -> GELU -> FC(8)   [Bottleneck / Latent]
+    DECODER:  Input(8)  -> FC(16) -> GELU -> FC(9)   [Reconstruction]
 
 Loss:  MSELoss(reconstruction, original)  -- fully Unsupervised.
 
@@ -17,10 +17,10 @@ import torch.nn.functional as F
 
 
 class AudioAutoencoder(nn.Module):
-    def __init__(self, input_dim: int = 9, latent_dim: int = 32, dropout: float = 0.1):
+    def __init__(self, input_dim: int = 9, latent_dim: int = 8, dropout: float = 0.1):
         super().__init__()
 
-        # ── Encoder  9 → 16 → 32 (latent) ────────────────────────────────────
+        # ── Encoder  9 → 16 → 8 (latent) ────────────────────────────────────
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, 16),
             nn.LayerNorm(16),
@@ -30,7 +30,7 @@ class AudioAutoencoder(nn.Module):
             nn.Linear(16, latent_dim),
         )
 
-        # ── Decoder  32 → 16 → 9 ──────────────────────────────────────────────
+        # ── Decoder  8 → 16 → 9 ──────────────────────────────────────────────
         self.decoder = nn.Sequential(
             nn.Linear(latent_dim, 16),
             nn.LayerNorm(16),
@@ -45,15 +45,13 @@ class AudioAutoencoder(nn.Module):
         """Returns dict with latent embedding and reconstruction."""
         latent = self.encoder(x)
         recon  = self.decoder(latent)
-        emb    = F.normalize(latent, p=2, dim=-1)  # L2-normalise for FAISS cosine
-        return {'embedding': emb, 'reconstruction': recon}
+        return {'embedding': latent, 'reconstruction': recon}
 
     # ── Encode only (inference / FAISS building) ──────────────────────────────
     def encode(self, x: torch.Tensor) -> torch.Tensor:
-        """Return L2-normalised latent vector (shape: [batch, latent_dim]).
-        This is the only call used when building / searching the FAISS index.
-        Signature is identical to the previous AudioOnlyModel.encode(),
-        so CLIPAudioBridge needs no changes.
+        """Return raw latent vector (shape: [batch, latent_dim]).
+        Uses L2 distance (Euclidean) in FAISS instead of cosine similarity.
+        Raw embeddings preserve natural spacing between songs.
         """
-        latent = self.encoder(x)
-        return F.normalize(latent, p=2, dim=-1)
+        return self.encoder(x)
+

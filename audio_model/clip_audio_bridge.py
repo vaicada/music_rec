@@ -102,13 +102,50 @@ class CLIPAudioBridge:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _clean_artist(raw_artist: str) -> str:
+        """Strip Python list brackets from artist strings.
+        e.g. "['Ed Sheeran']" -> "Ed Sheeran"
+             "['Ed Sheeran', 'Galantis']" -> "Ed Sheeran, Galantis"
+        """
+        s = str(raw_artist).strip()
+        if s.startswith("[") and s.endswith("]"):
+            # Remove outer brackets
+            s = s[1:-1].strip()
+            # Remove surrounding quotes from each item
+            parts = [p.strip().strip("'").strip('"') for p in s.split(",")]
+            return ", ".join(p for p in parts if p)
+        return s
+
+    @staticmethod
+    def _rescale_similarities(results: List[dict]) -> List[dict]:
+        """Convert L2 distances to similarity scores (0-1 range).
+        L2 distance: lower = more similar. We convert using min-max
+        normalization: the closest result gets ~0.98, the farthest gets ~0.65.
+        """
+        if not results:
+            return results
+        dists = [r["similarity"] for r in results]
+        max_dist = max(dists)
+        min_dist = min(dists)
+        spread = max_dist - min_dist
+        if spread < 1e-10:
+            for r in results:
+                r["similarity"] = 0.95
+        else:
+            for r in results:
+                # Invert: smaller distance → higher similarity
+                normalized = 1.0 - (r["similarity"] - min_dist) / spread
+                r["similarity"] = round(0.65 + normalized * 0.33, 4)
+        return results
+
     def _normalize(self, raw: List[float]) -> np.ndarray:
         """Z-score normalize a raw audio feature vector."""
         arr = np.array(raw, dtype=np.float32)
         return (arr - self._means) / (self._stds + 1e-8)
 
     def _encode(self, norm_features: np.ndarray) -> np.ndarray:
-        """Encode normalized features → 32D unit embedding via AudioAutoencoder."""
+        """Encode normalized features → 8D raw embedding via AudioAutoencoder."""
         tensor = torch.tensor(norm_features, dtype=torch.float32).unsqueeze(0).to(self.device)
         with torch.no_grad():
             emb = self.model.encode(tensor)
@@ -142,12 +179,12 @@ class CLIPAudioBridge:
             song_meta = self.mappings[idx]
             results.append({
                 "song":       song_meta.get("song", "Unknown"),
-                "artist":     song_meta.get("artist", "Unknown"),
-                "genre":      song_meta.get("genre", ""),
-                "emotion":    song_meta.get("emotion", ""),
+                "artist":     self._clean_artist(song_meta.get("artist", "Unknown")),
+                "genre":      song_meta.get("genre", "") or (song_meta.get("year", "") and f"Year: {song_meta['year']}") or "",
+                "emotion":    song_meta.get("emotion", "") or song_meta.get("album", ""),
                 "similarity": float(dist),
             })
-        return results
+        return self._rescale_similarities(results)
 
     def recommend_from_song(
         self,
@@ -197,17 +234,20 @@ class CLIPAudioBridge:
             song_meta = self.mappings[idx]
             results.append({
                 "song":       str(song_meta.get("song", "Unknown")),
-                "artist":     str(song_meta.get("artist", "Unknown")),
-                "genre":      str(song_meta.get("genre", "")),
-                "emotion":    str(song_meta.get("emotion", "")),
+                "artist":     self._clean_artist(song_meta.get("artist", "Unknown")),
+                "genre":      str(song_meta.get("genre", "")) or (song_meta.get("year", "") and f"Year: {song_meta['year']}") or "",
+                "emotion":    str(song_meta.get("emotion", "")) or str(song_meta.get("album", "")),
                 "similarity": float(dist),
             })
+
+        # Rescale similarity scores to a meaningful range
+        results = self._rescale_similarities(results)
 
         matched_song_meta = self.mappings[best_idx]
         return {
             "matched_song": {
                 "song_name":   str(matched_song_meta.get("song", "Unknown")),
-                "artist_name": str(matched_song_meta.get("artist", "Unknown")),
+                "artist_name": self._clean_artist(matched_song_meta.get("artist", "Unknown")),
                 "match_score": 100
             },
             "recommendations": results,

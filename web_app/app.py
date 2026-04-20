@@ -1,81 +1,41 @@
 """
 Music Recommender Web API - FastAPI Backend Application.
 
-================================================================================
-PURPOSE:
-================================================================================
-This module serves as the web interface for the Music Recommendation System.
-It exposes the recommendation engine's functionality through RESTful API endpoints,
-allowing users to interact with the system via a modern web browser.
+Serves the Music Recommendation Engine through RESTful endpoints.
+Architecture: Frontend (HTML/CSS/JS) → FastAPI → MusicRecommendationEngine → PyTorch + FAISS
 
-================================================================================
-ARCHITECTURE:
-================================================================================
-    Frontend (HTML/CSS/JS)
-           │
-           │ HTTP/REST
-           ▼
-    FastAPI Application (this file)
-           │
-           │ Python calls
-           ▼
-    MusicRecommendationEngine
-           │
-     ┌─────┴─────┐
-     ▼           ▼
-  PyTorch    FAISS Index
-   Model     (551K songs)
+API Endpoints:
+    GET  /                        : Main HTML page
+    GET  /api/health              : Health check
+    GET  /api/search              : Similar song search
+    GET  /api/mood/{m}            : Mood-based recommendations
+    GET  /api/youtube             : YouTube embed URL
+    POST /api/recommend-from-image: Image-based recommendation (CLIP)
+    POST /api/auth/register       : Register new user
+    POST /api/auth/login          : Login → JWT token
+    GET  /api/auth/me             : Get current user info
+    GET  /api/history             : Get search history
+    DELETE /api/history/{id}      : Delete history entry
+    DELETE /api/history           : Clear all history
+    POST /api/playlists           : Create playlist
+    GET  /api/playlists           : List playlists
+    GET  /api/playlists/{id}      : Get playlist with tracks
+    PUT  /api/playlists/{id}      : Update playlist
+    DELETE /api/playlists/{id}    : Delete playlist
+    POST /api/playlists/{id}/tracks        : Add track
+    DELETE /api/playlists/{id}/tracks/{tid}: Remove track
 
-================================================================================
-API ENDPOINTS:
-================================================================================
-- GET /              : Serve main HTML page
-- GET /api/health    : Health check endpoint
-- GET /api/search    : Search for similar songs by name
-- GET /api/mood/{mood}      : Get recommendations by mood
-- GET /api/context/{context}: Get recommendations by activity context
-- GET /api/youtube   : Get YouTube embed URL for a song
-
-================================================================================
-FILE STRUCTURE:
-================================================================================
-- Pydantic Models: SongResult, YouTubeResult, SearchResponse
-- lifespan(): Context manager for startup/shutdown (loads model)
-- index(): Serves the main HTML page
-- search_songs(): Similarity search endpoint
-- get_by_mood(): Mood-based recommendations
-- get_by_context(): Context-based recommendations
-- get_youtube_video(): YouTube integration
-
-================================================================================
-RELATED FILES:
-================================================================================
-- templates/index.html: Frontend HTML template
-- static/css/style.css: Dark theme CSS styling
-- static/js/main.js: Frontend JavaScript logic
-- hybrid_music_engine/inference.py: MusicRecommendationEngine class
-
-================================================================================
-USAGE:
-================================================================================
-    cd web_app
-    python -m uvicorn app:app --host 127.0.0.1 --port 8000
-
-Then open: http://127.0.0.1:8000
-API Docs: http://127.0.0.1:8000/docs
-
-================================================================================
-Author: Graduation Project
-Created: 2026-01-19
-================================================================================
+Usage: cd web_app && python -m uvicorn app:app --host 127.0.0.1 --port 8000
 """
 
-from fastapi import FastAPI, Query, HTTPException, UploadFile, File
+from fastapi import FastAPI, Query, HTTPException, UploadFile, File, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
+from datetime import datetime
 import asyncio
 import sys
 import os
@@ -125,6 +85,21 @@ except ImportError as e:
     SPOTIFY_CLIENT_AVAILABLE = False
     print(f"[WARNING] SpotifyClient import failed: {e}. Spotify enrichment disabled.")
 
+# Import database + auth modules (non-blocking — app still runs if DB fails)
+try:
+    from database import get_db, User, SearchHistory, Playlist, PlaylistTrack
+    from auth import (
+        get_current_user, get_optional_user,
+        hash_password, verify_password,
+        create_access_token, UserPublic,
+    )
+    from sqlalchemy.orm import Session
+    DB_AVAILABLE = True
+    print("[OK] Database + Auth modules loaded")
+except Exception as db_import_err:
+    DB_AVAILABLE = False
+    print(f"[WARNING] DB/Auth import failed: {db_import_err}. Auth & playlist features disabled.")
+
 # Try to import CLIPAudioBridge for Model 2 image recommendations
 try:
     from audio_model.clip_audio_bridge import CLIPAudioBridge
@@ -136,7 +111,24 @@ except ImportError as e:
 
 
 # =============================================================================
-# Pydantic Models
+# Utility Functions
+# =============================================================================
+
+def clean_artist_name(raw_artist: str) -> str:
+    """Strip Python list brackets from artist strings.
+    e.g. "['Ed Sheeran']" -> "Ed Sheeran"
+         "['Ed Sheeran', 'Galantis']" -> "Ed Sheeran, Galantis"
+    """
+    s = str(raw_artist).strip()
+    if s.startswith("[") and s.endswith("]"):
+        s = s[1:-1].strip()
+        parts = [p.strip().strip("'").strip('"') for p in s.split(",")]
+        return ", ".join(p for p in parts if p)
+    return s
+
+
+# =============================================================================
+# Pydantic Schemas
 # =============================================================================
 
 class SongResult(BaseModel):
@@ -173,6 +165,120 @@ class ImageRecommendationResponse(BaseModel):
     confidence: float = 0.0
     recommendations: Optional[List[SongResult]] = None
     message: str = ""
+
+
+# --- Auth Schemas ---
+
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+    @field_validator("username")
+    @classmethod
+    def username_valid(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError("Username must be at least 3 characters")
+        if len(v) > 50:
+            raise ValueError("Username must be at most 50 characters")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def password_valid(cls, v: str) -> str:
+        if len(v) < 6:
+            raise ValueError("Password must be at least 6 characters")
+        return v
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: dict
+
+
+# --- History Schemas ---
+
+class HistoryItem(BaseModel):
+    id: int
+    query_song: str
+    query_artist: str
+    model_used: str
+    results_count: int
+    searched_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# --- Playlist Schemas ---
+
+class PlaylistCreateRequest(BaseModel):
+    name: str
+    description: str = ""
+
+    @field_validator("name")
+    @classmethod
+    def name_valid(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Playlist name cannot be empty")
+        if len(v) > 255:
+            raise ValueError("Playlist name too long")
+        return v
+
+
+class TrackAddRequest(BaseModel):
+    song_name: str
+    artist_name: str = ""
+    genre: str = ""
+    emotion: str = ""
+    spotify_url: str = ""
+    album_art_url: str = ""
+
+
+class TrackOut(BaseModel):
+    id: int
+    song_name: str
+    artist_name: str
+    genre: str
+    emotion: str
+    spotify_url: str
+    album_art_url: str
+    position: int
+    added_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PlaylistOut(BaseModel):
+    id: int
+    name: str
+    description: str
+    created_at: datetime
+    updated_at: datetime
+    track_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class PlaylistDetailOut(BaseModel):
+    id: int
+    name: str
+    description: str
+    created_at: datetime
+    updated_at: datetime
+    tracks: List[TrackOut] = []
+
+    class Config:
+        from_attributes = True
 
 
 # =============================================================================
@@ -348,7 +454,7 @@ async def autocomplete(
         for meta in audio_bridge.mappings:
             song_name = str(meta.get("song", "")).strip()
             if song_name.lower().startswith(query):
-                artist_name = str(meta.get("artist", "")).strip()
+                artist_name = clean_artist_name(meta.get("artist", ""))
                 key = f"{song_name}::{artist_name}".lower()
                 
                 if key not in seen:
@@ -398,29 +504,55 @@ async def autocomplete(
 async def search_songs(
     q: str = Query(..., description="Song name to search for"),
     artist: Optional[str] = Query(None, description="Artist name (optional)"),
-    model: str = Query("model1", description="Recommendation model (model1 or model2)")
+    model: str = Query("model1", description="Recommendation model (model1 or model2)"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
 ):
     """
     Search for similar songs based on song name.
     Returns top 10 most similar songs from the database.
+    If user is logged in, automatically saves to search history.
     """
     if engine is None:
         raise HTTPException(status_code=503, detail="Recommendation engine not initialized")
-    
+
     if model == "model2":
         if audio_bridge is None:
             raise HTTPException(status_code=503, detail="Model 2 (Audio-Only) not available")
-        # Run in thread since recommend_from_song isn't async
         m2_res = await asyncio.to_thread(audio_bridge.recommend_from_song, q, artist, 10)
         results = m2_res["recommendations"] if m2_res else []
     else:
-        # Run Model 1 in thread just in case it blocks
         results = await asyncio.to_thread(engine.get_similar_songs, q, artist, 10)
-    
+
     if not results:
         return SearchResponse(query=q, results=[], count=0)
-    
+
     songs = [SongResult(**r) for r in results]
+
+    # Auto-save to history if user is logged in
+    if DB_AVAILABLE and credentials is not None:
+        try:
+            from auth import decode_token
+            from database import SessionLocal
+            payload = decode_token(credentials.credentials)
+            if payload is not None:
+                db_session = SessionLocal()
+                try:
+                    user = db_session.query(User).filter(User.id == int(payload.sub)).first()
+                    if user:
+                        entry = SearchHistory(
+                            user_id=user.id,
+                            query_song=q,
+                            query_artist=artist or "",
+                            model_used=model,
+                            results_count=len(songs),
+                        )
+                        db_session.add(entry)
+                        db_session.commit()
+                finally:
+                    db_session.close()
+        except Exception as hist_err:
+            print(f"[WARNING] Failed to save search history: {hist_err}")
+
     return SearchResponse(query=q, results=songs, count=len(songs))
 
 
@@ -788,6 +920,324 @@ async def recommend_from_image_v2(
             success=False,
             message="An error occurred while analyzing the image. Please try again."
         )
+
+
+# =============================================================================
+# Auth Endpoints
+# =============================================================================
+
+@app.post("/api/auth/register", response_model=AuthResponse)
+async def register(
+    body: RegisterRequest,
+    db: "Session" = Depends(get_db),
+):
+    """Register a new user account."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+
+    # Check uniqueness
+    if db.query(User).filter(User.username == body.username).first():
+        raise HTTPException(status_code=400, detail="Username already taken")
+    if db.query(User).filter(User.email == body.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    user = User(
+        username=body.username,
+        email=body.email,
+        password_hash=hash_password(body.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token(user.id, user.username)
+    return AuthResponse(
+        token=token,
+        user={"id": user.id, "username": user.username, "email": user.email},
+    )
+
+
+@app.post("/api/auth/login", response_model=AuthResponse)
+async def login(
+    body: LoginRequest,
+    db: "Session" = Depends(get_db),
+):
+    """Login with username + password, returns JWT token."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+
+    user = db.query(User).filter(User.username == body.username).first()
+    if not user or not verify_password(body.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    token = create_access_token(user.id, user.username)
+    return AuthResponse(
+        token=token,
+        user={"id": user.id, "username": user.username, "email": user.email},
+    )
+
+
+@app.get("/api/auth/me")
+async def get_me(current_user: "User" = Depends(get_current_user)):
+    """Get current authenticated user info."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+    return {"id": current_user.id, "username": current_user.username, "email": current_user.email}
+
+
+# =============================================================================
+# Search History Endpoints
+# =============================================================================
+
+@app.get("/api/history", response_model=List[HistoryItem])
+async def get_history(
+    limit: int = Query(50, ge=1, le=200),
+    current_user: "User" = Depends(get_current_user),
+    db: "Session" = Depends(get_db),
+):
+    """Get search history for the authenticated user (newest first)."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+    items = (
+        db.query(SearchHistory)
+        .filter(SearchHistory.user_id == current_user.id)
+        .order_by(SearchHistory.searched_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return items
+
+
+@app.delete("/api/history/{item_id}")
+async def delete_history_item(
+    item_id: int,
+    current_user: "User" = Depends(get_current_user),
+    db: "Session" = Depends(get_db),
+):
+    """Delete a single search history entry."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+    item = db.query(SearchHistory).filter(
+        SearchHistory.id == item_id,
+        SearchHistory.user_id == current_user.id,
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="History entry not found")
+    db.delete(item)
+    db.commit()
+    return {"success": True}
+
+
+@app.delete("/api/history")
+async def clear_history(
+    current_user: "User" = Depends(get_current_user),
+    db: "Session" = Depends(get_db),
+):
+    """Clear all search history for the authenticated user."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+    db.query(SearchHistory).filter(SearchHistory.user_id == current_user.id).delete()
+    db.commit()
+    return {"success": True}
+
+
+# =============================================================================
+# Playlist Endpoints
+# =============================================================================
+
+@app.post("/api/playlists", response_model=PlaylistOut)
+async def create_playlist(
+    body: PlaylistCreateRequest,
+    current_user: "User" = Depends(get_current_user),
+    db: "Session" = Depends(get_db),
+):
+    """Create a new playlist for the authenticated user."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+    playlist = Playlist(
+        user_id=current_user.id,
+        name=body.name,
+        description=body.description,
+    )
+    db.add(playlist)
+    db.commit()
+    db.refresh(playlist)
+    result = PlaylistOut(
+        id=playlist.id,
+        name=playlist.name,
+        description=playlist.description,
+        created_at=playlist.created_at,
+        updated_at=playlist.updated_at,
+        track_count=0,
+    )
+    return result
+
+
+@app.get("/api/playlists", response_model=List[PlaylistOut])
+async def list_playlists(
+    current_user: "User" = Depends(get_current_user),
+    db: "Session" = Depends(get_db),
+):
+    """List all playlists for the authenticated user."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+    playlists = (
+        db.query(Playlist)
+        .filter(Playlist.user_id == current_user.id)
+        .order_by(Playlist.updated_at.desc())
+        .all()
+    )
+    return [
+        PlaylistOut(
+            id=p.id,
+            name=p.name,
+            description=p.description,
+            created_at=p.created_at,
+            updated_at=p.updated_at,
+            track_count=len(p.tracks),
+        )
+        for p in playlists
+    ]
+
+
+@app.get("/api/playlists/{playlist_id}", response_model=PlaylistDetailOut)
+async def get_playlist(
+    playlist_id: int,
+    current_user: "User" = Depends(get_current_user),
+    db: "Session" = Depends(get_db),
+):
+    """Get a playlist with all its tracks."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+    playlist = db.query(Playlist).filter(
+        Playlist.id == playlist_id,
+        Playlist.user_id == current_user.id,
+    ).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    return PlaylistDetailOut(
+        id=playlist.id,
+        name=playlist.name,
+        description=playlist.description,
+        created_at=playlist.created_at,
+        updated_at=playlist.updated_at,
+        tracks=[TrackOut.model_validate(t) for t in playlist.tracks],
+    )
+
+
+@app.put("/api/playlists/{playlist_id}", response_model=PlaylistOut)
+async def update_playlist(
+    playlist_id: int,
+    body: PlaylistCreateRequest,
+    current_user: "User" = Depends(get_current_user),
+    db: "Session" = Depends(get_db),
+):
+    """Update playlist name and/or description."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+    playlist = db.query(Playlist).filter(
+        Playlist.id == playlist_id,
+        Playlist.user_id == current_user.id,
+    ).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    playlist.name = body.name
+    playlist.description = body.description
+    playlist.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(playlist)
+    return PlaylistOut(
+        id=playlist.id,
+        name=playlist.name,
+        description=playlist.description,
+        created_at=playlist.created_at,
+        updated_at=playlist.updated_at,
+        track_count=len(playlist.tracks),
+    )
+
+
+@app.delete("/api/playlists/{playlist_id}")
+async def delete_playlist(
+    playlist_id: int,
+    current_user: "User" = Depends(get_current_user),
+    db: "Session" = Depends(get_db),
+):
+    """Delete a playlist (and all its tracks via cascade)."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+    playlist = db.query(Playlist).filter(
+        Playlist.id == playlist_id,
+        Playlist.user_id == current_user.id,
+    ).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    db.delete(playlist)
+    db.commit()
+    return {"success": True}
+
+
+@app.post("/api/playlists/{playlist_id}/tracks", response_model=TrackOut)
+async def add_track_to_playlist(
+    playlist_id: int,
+    body: TrackAddRequest,
+    current_user: "User" = Depends(get_current_user),
+    db: "Session" = Depends(get_db),
+):
+    """Add a track to a playlist."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+    playlist = db.query(Playlist).filter(
+        Playlist.id == playlist_id,
+        Playlist.user_id == current_user.id,
+    ).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+
+    # Assign position = last + 1
+    max_pos = max((t.position for t in playlist.tracks), default=-1)
+    track = PlaylistTrack(
+        playlist_id=playlist_id,
+        song_name=body.song_name,
+        artist_name=body.artist_name,
+        genre=body.genre,
+        emotion=body.emotion,
+        spotify_url=body.spotify_url,
+        album_art_url=body.album_art_url,
+        position=max_pos + 1,
+    )
+    db.add(track)
+    playlist.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(track)
+    return TrackOut.model_validate(track)
+
+
+@app.delete("/api/playlists/{playlist_id}/tracks/{track_id}")
+async def remove_track_from_playlist(
+    playlist_id: int,
+    track_id: int,
+    current_user: "User" = Depends(get_current_user),
+    db: "Session" = Depends(get_db),
+):
+    """Remove a track from a playlist."""
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Auth not available")
+    playlist = db.query(Playlist).filter(
+        Playlist.id == playlist_id,
+        Playlist.user_id == current_user.id,
+    ).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    track = db.query(PlaylistTrack).filter(
+        PlaylistTrack.id == track_id,
+        PlaylistTrack.playlist_id == playlist_id,
+    ).first()
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    db.delete(track)
+    playlist.updated_at = datetime.utcnow()
+    db.commit()
+    return {"success": True}
 
 
 # =============================================================================

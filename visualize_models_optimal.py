@@ -41,7 +41,7 @@ def visualize_model1_3d(num_samples=2500):
             emb = index.reconstruct(int(idx))
             embeddings.append(emb)
             valid_indices.append(idx)
-        except:
+        except RuntimeError:
             pass
             
     embeddings = np.vstack(embeddings)
@@ -120,7 +120,7 @@ def visualize_model2_gradient(num_samples=3000):
         try:
             embeddings.append(index.reconstruct(int(idx)))
             valid_indices.append(idx)
-        except:
+        except RuntimeError:
             pass
             
     embeddings = np.vstack(embeddings)

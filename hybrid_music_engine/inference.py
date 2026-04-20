@@ -28,7 +28,7 @@ try:
     try:
         _ = faiss.StandardGpuResources()
         FAISS_GPU_AVAILABLE = True
-    except:
+    except (AttributeError, RuntimeError):
         FAISS_GPU_AVAILABLE = False
 except ImportError:
     faiss = None
@@ -298,9 +298,10 @@ class MusicRecommendationEngine:
         # Audio features might be missing in Lite Mode
         try:
             audio_features = self.audio_processor.transform(pd.DataFrame([song_row]))
-        except:
-            # Fallback to zeros if columns missing
-            audio_features = torch.zeros((1, 11))
+        except (KeyError, ValueError, TypeError) as e:
+            # Fallback to zeros if columns missing (Lite Mode)
+            self.logger.log(f"Audio features unavailable: {e}", "INFERENCE", level="WARNING")
+            audio_features = torch.zeros((1, self.config.audio.input_dim))
         
         inputs = {
             'input_ids': text_encoded['input_ids'].to(self.device),
@@ -400,46 +401,126 @@ class MusicRecommendationEngine:
         return recommendations
 
     def get_recommendations_by_mood(self, mood: str, top_k: int = 10) -> List[Dict]:
+        """Return `top_k` songs matching the mood, randomly sampled from a large candidate pool."""
+        import random
         if self.song_data is None: return []
-        
+
         mood_mapping = {
-            'happy': {'emotion': ['joy'], 'valence': (0.6, 1.0), 'energy': (0.5, 1.0)},
-            'sad': {'emotion': ['sadness'], 'valence': (0.0, 0.4), 'energy': (0.0, 0.5)},
-            'energetic': {'emotion': ['joy'], 'valence': (0.5, 1.0), 'energy': (0.7, 1.0)},
-            'calm': {'emotion': [], 'valence': (0.4, 0.7), 'energy': (0.0, 0.4)},
-            'angry': {'emotion': ['anger'], 'valence': (0.0, 0.4), 'energy': (0.7, 1.0)},
+            'happy':    {'emotion': ['joy'],     'valence': (0.6, 1.0), 'energy': (0.5, 1.0)},
+            'sad':      {'emotion': ['sadness'], 'valence': (0.0, 0.45), 'energy': (0.0, 0.55)},
+            'energetic':{'emotion': ['joy'],     'valence': (0.5, 1.0), 'energy': (0.7, 1.0)},
+            'calm':     {'emotion': [],          'valence': (0.35, 0.7), 'energy': (0.0, 0.45)},
+            'angry':    {'emotion': ['anger'],   'valence': (0.0, 0.45), 'energy': (0.65, 1.0)},
         }
-        
+
         mood_lower = mood.lower()
         if mood_lower not in mood_mapping: mood_lower = 'happy'
         filters = mood_mapping[mood_lower]
         filtered = self.song_data.copy()
-        
+
         if filters['emotion'] and 'emotion' in filtered.columns:
             filtered = filtered[filtered['emotion'].isin(filters['emotion'])]
         if 'valence' in filtered.columns:
-            filtered = filtered[(filtered['valence'] >= filters['valence'][0]) & (filtered['valence'] <= filters['valence'][1])]
+            v_lo, v_hi = filters['valence']
+            filtered = filtered[(filtered['valence'] >= v_lo) & (filtered['valence'] <= v_hi)]
         if 'energy' in filtered.columns:
-            filtered = filtered[(filtered['energy'] >= filters['energy'][0]) & (filtered['energy'] <= filters['energy'][1])]
-        
+            e_lo, e_hi = filters['energy']
+            filtered = filtered[(filtered['energy'] >= e_lo) & (filtered['energy'] <= e_hi)]
+
+        # Fallback: if filter is too strict, relax and just use emotion
+        if len(filtered) < top_k * 2:
+            filtered = self.song_data.copy()
+            if filters['emotion'] and 'emotion' in filtered.columns:
+                filtered = filtered[filtered['emotion'].isin(filters['emotion'])]
+            # Still too small → use entire dataset
+            if len(filtered) < top_k:
+                filtered = self.song_data.copy()
+
+        # Build a weighted pool: top 300 by Popularity (or full set if smaller)
+        pool_size = min(300, len(filtered))
         if 'Popularity' in filtered.columns:
-            filtered = filtered.sort_values('Popularity', ascending=False)
-            
+            pool = filtered.nlargest(pool_size, 'Popularity')
+        else:
+            pool = filtered.head(pool_size)
+
+        # Random-sample top_k from the pool
+        sample_size = min(top_k, len(pool))
+        sampled = pool.sample(n=sample_size)
+
         song_col, artist_col = self._get_column_names()
         recommendations = []
-        for _, row in filtered.head(top_k).iterrows():
+        for _, row in sampled.iterrows():
             recommendations.append({
                 'song': row.get(song_col, ''),
                 'artist': row.get(artist_col, ''),
                 'genre': row.get('Genre', row.get('genre', '')),
                 'emotion': row.get('emotion', ''),
+                'similarity': None,
             })
+        random.shuffle(recommendations)
         return recommendations
 
     def get_recommendations_by_context(self, context: str, top_k: int = 10) -> List[Dict]:
+        """Return `top_k` songs matching the activity/context, randomly sampled."""
+        import random
         if self.song_data is None: return []
-        # (Simplified context logic)
-        return self.get_recommendations_by_mood('happy', top_k)
+
+        # Context → emotion + audio feature filters
+        context_mapping = {
+            'party':   {'emotion': ['joy'],          'valence': (0.65, 1.0), 'energy': (0.7, 1.0), 'danceability': (0.6, 1.0)},
+            'workout': {'emotion': ['joy', 'anger'],  'valence': (0.4, 1.0),  'energy': (0.75, 1.0), 'danceability': None},
+            'study':   {'emotion': ['sadness'],       'valence': (0.2, 0.65), 'energy': (0.0, 0.5),  'danceability': None},
+            'relax':   {'emotion': ['sadness', 'love'],'valence': (0.3, 0.7), 'energy': (0.0, 0.45), 'danceability': None},
+            'driving': {'emotion': ['joy'],           'valence': (0.5, 1.0),  'energy': (0.55, 1.0), 'danceability': None},
+        }
+
+        ctx_lower = context.lower()
+        if ctx_lower not in context_mapping: ctx_lower = 'party'
+        filters = context_mapping[ctx_lower]
+        filtered = self.song_data.copy()
+
+        if filters['emotion'] and 'emotion' in filtered.columns:
+            filtered = filtered[filtered['emotion'].isin(filters['emotion'])]
+        if 'valence' in filtered.columns:
+            v_lo, v_hi = filters['valence']
+            filtered = filtered[(filtered['valence'] >= v_lo) & (filtered['valence'] <= v_hi)]
+        if 'energy' in filtered.columns:
+            e_lo, e_hi = filters['energy']
+            filtered = filtered[(filtered['energy'] >= e_lo) & (filtered['energy'] <= e_hi)]
+        if filters.get('danceability') and 'danceability' in filtered.columns:
+            d_lo, d_hi = filters['danceability']
+            filtered = filtered[(filtered['danceability'] >= d_lo) & (filtered['danceability'] <= d_hi)]
+
+        # Fallback if too restrictive
+        if len(filtered) < top_k * 2:
+            filtered = self.song_data.copy()
+            if filters['emotion'] and 'emotion' in filtered.columns:
+                filtered = filtered[filtered['emotion'].isin(filters['emotion'])]
+            if len(filtered) < top_k:
+                filtered = self.song_data.copy()
+
+        # Build a weighted pool and random-sample
+        pool_size = min(300, len(filtered))
+        if 'Popularity' in filtered.columns:
+            pool = filtered.nlargest(pool_size, 'Popularity')
+        else:
+            pool = filtered.head(pool_size)
+
+        sample_size = min(top_k, len(pool))
+        sampled = pool.sample(n=sample_size)
+
+        song_col, artist_col = self._get_column_names()
+        recommendations = []
+        for _, row in sampled.iterrows():
+            recommendations.append({
+                'song': row.get(song_col, ''),
+                'artist': row.get(artist_col, ''),
+                'genre': row.get('Genre', row.get('genre', '')),
+                'emotion': row.get('emotion', ''),
+                'similarity': None,
+            })
+        random.shuffle(recommendations)
+        return recommendations
 
     def build_index(self, data_path: str, save_path: Optional[str] = None) -> None:
         self.load_song_data(data_path)
@@ -456,8 +537,9 @@ class MusicRecommendationEngine:
                     try:
                         emb = self._encode_song(row)
                         batch_embeddings.append(emb.numpy().squeeze())
-                    except:
-                        batch_embeddings.append(np.zeros(64))
+                    except (RuntimeError, ValueError, KeyError) as e:
+                        self.logger.log(f"Encoding failed for row: {e}", "INDEX", level="WARNING")
+                        batch_embeddings.append(np.zeros(self.config.fusion.final_embedding_dim))
                 all_embeddings.extend(batch_embeddings)
         
         self.embeddings = np.array(all_embeddings, dtype=np.float32)
