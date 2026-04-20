@@ -32,30 +32,39 @@ from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 # Database Connection
 # =============================================================================
 
-# Priority: DATABASE_URL env var → PostgreSQL → SQLite fallback
+# Priority: DATABASE_URL env var → PostgreSQL env vars → SQLite fallback
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 if not DATABASE_URL:
-    # Try PostgreSQL with common defaults
+    # Try PostgreSQL with env vars
     PG_USER = os.getenv("PG_USER", "postgres")
     PG_PASS = os.getenv("PG_PASS", "postgres")
     PG_HOST = os.getenv("PG_HOST", "localhost")
     PG_PORT = os.getenv("PG_PORT", "5432")
-    PG_DB = os.getenv("PG_DB", "music_recommender")
+    PG_DB   = os.getenv("PG_DB",   "music_recommender")
     DATABASE_URL = f"postgresql://{PG_USER}:{PG_PASS}@{PG_HOST}:{PG_PORT}/{PG_DB}"
 
 # Try connecting to PostgreSQL; fall back to SQLite on failure
 try:
     _test_engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     with _test_engine.connect() as conn:
-        conn.execute(conn.connection.cursor().execute("SELECT 1") if False else __import__("sqlalchemy").text("SELECT 1"))
+        conn.execute(__import__("sqlalchemy").text("SELECT 1"))
     engine = _test_engine
     DB_TYPE = "postgresql"
-    print(f"[DB] Connected to PostgreSQL: {PG_HOST}:{PG_PORT}/{PG_DB}" if "postgresql" in DATABASE_URL else f"[DB] Connected: {DATABASE_URL[:50]}...")
+    if "postgresql" in DATABASE_URL:
+        print(f"[DB] Connected to PostgreSQL: {PG_HOST}:{PG_PORT}/{PG_DB}")
+    else:
+        print(f"[DB] Connected: {DATABASE_URL[:50]}...")
 except Exception as pg_err:
     # Fallback to SQLite
-    db_dir = os.path.dirname(os.path.abspath(__file__))
-    sqlite_path = os.path.join(db_dir, "music_rec.db")
+    # On Hugging Face Spaces: use /data (persistent volume)
+    # On local dev: use the web_app directory
+    if os.path.isdir("/data"):
+        sqlite_path = "/data/music_rec.db"           # HF Spaces persistent
+    else:
+        db_dir = os.path.dirname(os.path.abspath(__file__))
+        sqlite_path = os.path.join(db_dir, "music_rec.db")  # local dev
+
     DATABASE_URL = f"sqlite:///{sqlite_path}"
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
     DB_TYPE = "sqlite"
