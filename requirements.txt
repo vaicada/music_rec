@@ -50,3 +50,7 @@ python-jose[cryptography]>=3.3.0
 
 # Password hashing
 passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0
+
+# Email validation (required by pydantic EmailStr)
+email-validator>=2.0.0

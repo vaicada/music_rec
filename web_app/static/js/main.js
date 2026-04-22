@@ -1052,7 +1052,9 @@ async function handleLogin() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password }),
         });
-        const data = await res.json();
+
+        let data;
+        try { data = await res.json(); } catch { data = { detail: `Server error (${res.status})` }; }
 
         if (!res.ok) {
             errEl.textContent = data.detail || 'Login failed.';
@@ -1066,8 +1068,9 @@ async function handleLogin() {
         document.getElementById('loginUsername').value = '';
         document.getElementById('loginPassword').value = '';
     } catch (err) {
-        errEl.textContent = 'Network error. Please try again.';
+        errEl.textContent = `Error: ${err.message || 'Network error. Please try again.'}`;
         errEl.classList.remove('hidden');
+        console.error('[Login error]', err);
     } finally {
         btn.disabled = false;
         btn.textContent = 'Login';
@@ -1097,7 +1100,9 @@ async function handleRegister() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, email, password }),
         });
-        const data = await res.json();
+
+        let data;
+        try { data = await res.json(); } catch { data = { detail: `Server error (${res.status})` }; }
 
         if (!res.ok) {
             // Pydantic validation errors come as array
@@ -1113,8 +1118,9 @@ async function handleRegister() {
         closeAuthModal();
         showToast(`Account created! Welcome, ${data.user.username}! 🎉`, 'info');
     } catch (err) {
-        errEl.textContent = 'Network error. Please try again.';
+        errEl.textContent = `Error: ${err.message || 'Network error. Please try again.'}`;
         errEl.classList.remove('hidden');
+        console.error('[Register error]', err);
     } finally {
         btn.disabled = false;
         btn.textContent = 'Create Account';
