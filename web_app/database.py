@@ -51,10 +51,9 @@ try:
         conn.execute(__import__("sqlalchemy").text("SELECT 1"))
     engine = _test_engine
     DB_TYPE = "postgresql"
-    if "postgresql" in DATABASE_URL:
-        print(f"[DB] Connected to PostgreSQL: {PG_HOST}:{PG_PORT}/{PG_DB}")
-    else:
-        print(f"[DB] Connected: {DATABASE_URL[:50]}...")
+    # Mask password for safe logging
+    _safe_url = DATABASE_URL.split("@")[-1] if "@" in DATABASE_URL else DATABASE_URL[:50]
+    print(f"[DB] Connected to PostgreSQL: {_safe_url}")
 except Exception as pg_err:
     # Fallback to SQLite
     # On Hugging Face Spaces: use /data (persistent volume)
