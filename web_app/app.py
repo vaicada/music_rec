@@ -100,6 +100,52 @@ except Exception as db_import_err:
     DB_AVAILABLE = False
     print(f"[WARNING] DB/Auth import failed: {db_import_err}. Auth & playlist features disabled.")
 
+    # ---------------------------------------------------------------------------
+    # Fallback stubs — keep FastAPI from raising NameError at module load time
+    # when database/auth modules are absent (e.g. Hugging Face Spaces deploy).
+    # All real auth endpoints already guard with `if not DB_AVAILABLE` and return
+    # HTTP 503, so these stubs are never actually called in production.
+    # ---------------------------------------------------------------------------
+    def get_db():  # type: ignore[misc]
+        raise RuntimeError("Database not available")
+        yield  # make it a generator so FastAPI treats it as a dependency
+
+    def get_current_user():  # type: ignore[misc]
+        raise RuntimeError("Auth not available")
+
+    def get_optional_user():  # type: ignore[misc]
+        return None
+
+    def hash_password(pw: str) -> str:  # type: ignore[misc]
+        return ""
+
+    def verify_password(pw: str, hashed: str) -> bool:  # type: ignore[misc]
+        return False
+
+    def create_access_token(user_id: int, username: str) -> str:  # type: ignore[misc]
+        return ""
+
+    # Dummy model classes so type annotations don't break
+    class User:  # type: ignore[no-redef]
+        id: int
+        username: str
+        email: str
+
+    class SearchHistory:  # type: ignore[no-redef]
+        pass
+
+    class Playlist:  # type: ignore[no-redef]
+        pass
+
+    class PlaylistTrack:  # type: ignore[no-redef]
+        pass
+
+    class Session:  # type: ignore[no-redef]
+        pass
+
+    class UserPublic:  # type: ignore[no-redef]
+        pass
+
 # Try to import CLIPAudioBridge for Model 2 image recommendations
 try:
     from audio_model.clip_audio_bridge import CLIPAudioBridge
