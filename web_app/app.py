@@ -41,7 +41,10 @@ import sys
 import os
 
 # Add parent directory to path to import hybrid_music_engine
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_web_app_dir  = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _project_root)   # /app  → hybrid_music_engine, audio_model
+sys.path.insert(1, _web_app_dir)    # /app/web_app → database, auth, download_helper
 
 # Import download helper (try both relative and package paths)
 try:

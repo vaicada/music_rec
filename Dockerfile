@@ -39,7 +39,9 @@ COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 
 # Set PYTHONPATH so all project modules are importable
-ENV PYTHONPATH=/app
+# /app           → hybrid_music_engine, audio_model, models
+# /app/web_app   → database, auth, download_helper
+ENV PYTHONPATH=/app:/app/web_app
 
 # Copy all necessary application files
 COPY web_app/ ./web_app/
