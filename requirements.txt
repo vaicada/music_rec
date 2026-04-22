@@ -49,8 +49,10 @@ psycopg2-binary>=2.9.0
 python-jose[cryptography]>=3.3.0
 
 # Password hashing
+# NOTE: passlib 1.7.4 is incompatible with bcrypt>=4.0 (detect_wrap_bug issue).
+# Must pin bcrypt to 3.x until passlib releases a fix.
 passlib[bcrypt]>=1.7.4
-bcrypt>=4.0.0
+bcrypt>=3.0,<4.0
 
 # Email validation (required by pydantic EmailStr)
 email-validator>=2.0.0
