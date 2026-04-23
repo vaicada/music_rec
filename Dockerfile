@@ -28,8 +28,10 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install libpq5 runtime library (needed by psycopg2-binary)
+# curl is required for the HEALTHCHECK instruction
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder
@@ -48,6 +50,7 @@ COPY web_app/ ./web_app/
 COPY hybrid_music_engine/ ./hybrid_music_engine/
 COPY audio_model/ ./audio_model/
 COPY models/ ./models/
+COPY spotify_client.py .
 
 # Create data directories (populated at runtime by download_helper)
 RUN mkdir -p data/processed data/processed/tracks
@@ -57,6 +60,10 @@ RUN mkdir -p /data && chmod 777 /data
 
 # Expose port (Hugging Face Spaces uses 7860 by default)
 EXPOSE 7860
+
+# Health check - wait 120s for model loading before first check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:7860/api/health || exit 1
 
 # Run from /app so all relative imports resolve correctly
 WORKDIR /app
