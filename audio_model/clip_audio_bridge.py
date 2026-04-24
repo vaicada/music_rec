@@ -94,11 +94,21 @@ class CLIPAudioBridge:
         # Load FAISS index
         self.faiss_index = faiss.read_index(faiss_path)
 
+        # Validate FAISS index dimension matches model embedding dimension
+        faiss_dim = self.faiss_index.d
+        if faiss_dim != embedding_dim:
+            raise ValueError(
+                f"FAISS index dimension mismatch: index has {faiss_dim}D vectors "
+                f"but model produces {embedding_dim}D embeddings. "
+                f"The GDrive-hosted index may be outdated (old 32D vs current {embedding_dim}D). "
+                f"Please rebuild and re-upload the FAISS index."
+            )
+
         # Load song mappings
         with open(mappings_path, "rb") as f:
             self.mappings = pickle.load(f)
 
-        print(f"[CLIPAudioBridge] Loaded AudioAutoencoder | FAISS: {self.faiss_index.ntotal} songs | Device: {device_str}")
+        print(f"[CLIPAudioBridge] Loaded AudioAutoencoder | FAISS: {self.faiss_index.ntotal} songs | dim={faiss_dim} | Device: {device_str}")
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

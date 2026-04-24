@@ -66,12 +66,16 @@ FILE_CONFIGS = {
 
     # -------------------------------------------------------------------------
     # Model 2 (Audio Autoencoder) files
+    # IMPORTANT: tracks_faiss.index MUST be the 8D version (latent_dim=8).
+    # The old 32D backup (tracks_faiss_dim32_backup.index) must NOT be uploaded here.
+    # Rebuild with: python -m audio_model.build_audio_faiss
+    # Then re-upload models/tracks_faiss.index to GDrive and update the id= below.
     # -------------------------------------------------------------------------
     "tracks_faiss_index": {
-        "url": "https://drive.google.com/uc?id=15uPbGZFiG_UaS8DtM9u9I2R7MoUakVBG",  # tracks_faiss.index
+        "url": "https://drive.google.com/file/d/1yM6XvWHjityGZ2d4C9U66ajhD-KtSlED/view?usp=drive_link",  # tracks_faiss.index (8D, latent_dim=8)
         "path": "../models/tracks_faiss.index",
         "size_mb": 133,
-        "description": "Model 2 FAISS index (1.2M audio tracks)"
+        "description": "Model 2 FAISS index (1.2M audio tracks, 8D)"
     },
     "tracks_faiss_mappings": {
         "url": "https://drive.google.com/uc?id=1mSEPyE0l9_BoPYrlRWN9pymp63D0P1FR",  # tracks_faiss.index.mappings.pkl

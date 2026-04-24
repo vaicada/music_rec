@@ -37,6 +37,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime
 import asyncio
+import traceback
 import sys
 import os
 
@@ -965,9 +966,10 @@ async def recommend_from_image_v2(
         )
     except Exception as e:
         print(f"[ERROR] Image v2 analysis failed: {e}")
+        print(traceback.format_exc())
         return ImageRecommendationResponse(
             success=False,
-            message="An error occurred while analyzing the image. Please try again."
+            message=f"An error occurred while analyzing the image: {e}"
         )
 
 
