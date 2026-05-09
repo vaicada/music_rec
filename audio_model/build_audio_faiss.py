@@ -85,9 +85,15 @@ def build_index(
     embeddings = np.vstack(all_embeddings).astype(np.float32)
     print(f"[build_faiss] Embeddings shape: {embeddings.shape}")
 
+    # ── L2-normalize embeddings so that IndexFlatIP == cosine similarity ──────
+    # After normalization: inner_product(u, v) = cosine(u, v) ∈ [-1, 1]
+    # This is REQUIRED — without it, raw magnitudes inflate IP to arbitrary values
+    faiss.normalize_L2(embeddings)
+    print("[build_faiss] Embeddings L2-normalized.")
+
     # ── Build FAISS index ─────────────────────────────────────────────────────
     print("[build_faiss] Building FAISS IndexFlatIP ...")
-    index = faiss.IndexFlatIP(latent_dim)   # Inner product == cosine for L2-normed vectors
+    index = faiss.IndexFlatIP(latent_dim)
     index.add(embeddings)  # type: ignore[call-arg]
     print(f"[build_faiss] FAISS index total vectors: {index.ntotal:,}")
 

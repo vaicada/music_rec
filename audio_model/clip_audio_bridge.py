@@ -108,11 +108,13 @@ class CLIPAudioBridge:
         return (arr - self._means) / (self._stds + 1e-8)
 
     def _encode(self, norm_features: np.ndarray) -> np.ndarray:
-        """Encode normalized features → 32D unit embedding via AudioAutoencoder."""
+        """Encode normalized features → 32D L2-unit embedding via AudioAutoencoder."""
         tensor = torch.tensor(norm_features, dtype=torch.float32).unsqueeze(0).to(self.device)
         with torch.no_grad():
             emb = self.model.encode(tensor)
-        return emb.cpu().numpy().astype(np.float32)
+        emb_np = emb.cpu().numpy().astype(np.float32)
+        faiss.normalize_L2(emb_np)   # Unit-normalize → IP = cosine similarity ∈ [-1, 1]
+        return emb_np
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -140,12 +142,14 @@ class CLIPAudioBridge:
             if idx < 0 or idx >= len(self.mappings):
                 continue
             song_meta = self.mappings[idx]
+            # dist is cosine similarity ∈ [-1, 1]; map to [0, 1] for display
+            similarity = float(max(0.0, min(1.0, (float(dist) + 1.0) / 2.0)))
             results.append({
                 "song":       song_meta.get("song", "Unknown"),
                 "artist":     song_meta.get("artist", "Unknown"),
                 "genre":      song_meta.get("genre", ""),
                 "emotion":    song_meta.get("emotion", ""),
-                "similarity": float(dist),
+                "similarity": similarity,
             })
         return results
 
@@ -181,9 +185,10 @@ class CLIPAudioBridge:
         if best_idx == -1:
             return None
 
-        # Get embedding directly from FAISS
+        # Get embedding directly from FAISS then normalize the query
         query_emb = self.faiss_index.reconstruct(best_idx)
-        query_emb = np.expand_dims(query_emb, axis=0)
+        query_emb = np.expand_dims(query_emb, axis=0).astype(np.float32)
+        faiss.normalize_L2(query_emb)   # Ensure unit-norm even if index was built without it
 
         # Search (top_k + 1 to exclude the query itself)
         distances, indices = self.faiss_index.search(query_emb, top_k + 1)
@@ -195,12 +200,14 @@ class CLIPAudioBridge:
             if len(results) >= top_k:
                 break
             song_meta = self.mappings[idx]
+            # dist is cosine similarity ∈ [-1, 1]; map to [0, 1] for display
+            similarity = float(max(0.0, min(1.0, (float(dist) + 1.0) / 2.0)))
             results.append({
                 "song":       str(song_meta.get("song", "Unknown")),
                 "artist":     str(song_meta.get("artist", "Unknown")),
                 "genre":      str(song_meta.get("genre", "")),
                 "emotion":    str(song_meta.get("emotion", "")),
-                "similarity": float(dist),
+                "similarity": similarity,
             })
 
         matched_song_meta = self.mappings[best_idx]
