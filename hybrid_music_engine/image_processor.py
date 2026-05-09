@@ -149,8 +149,8 @@ class ImageMoodClassifier:
             Call load_model() explicitly or it will be loaded on first use.
         """
         self.model_name = model_name
-        self.model: Optional[CLIPModel] = None
-        self.processor: Optional[CLIPProcessor] = None
+        self.model: Optional["CLIPModel"] = None
+        self.processor: Optional["CLIPProcessor"] = None
         self.device = "cuda" if CLIP_AVAILABLE and torch.cuda.is_available() else "cpu"
         self.is_loaded = False
         
@@ -244,7 +244,8 @@ class ImageMoodClassifier:
             raise ValueError(f"Cannot process image: {e}")
         
         # Prepare inputs for CLIP
-        inputs = self.processor(
+        assert self.processor is not None  # guaranteed by is_loaded check above
+        inputs = self.processor(  # type: ignore[operator]
             text=self._text_prompts,
             images=image,
             return_tensors="pt",
@@ -255,6 +256,7 @@ class ImageMoodClassifier:
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         
         # Run inference
+        assert self.model is not None  # guaranteed by is_loaded check above
         with torch.no_grad():
             outputs = self.model(**inputs)
             

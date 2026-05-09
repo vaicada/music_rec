@@ -26,12 +26,12 @@ try:
     import faiss
     # Check for GPU support
     try:
-        _ = faiss.StandardGpuResources()
+        _ = faiss.StandardGpuResources()  # type: ignore[attr-defined]
         FAISS_GPU_AVAILABLE = True
     except:
         FAISS_GPU_AVAILABLE = False
 except ImportError:
-    faiss = None
+    faiss = None  # type: ignore[assignment]
     FAISS_GPU_AVAILABLE = False
     print("Warning: FAISS not installed. Install with: pip install faiss-cpu or faiss-gpu")
 
@@ -60,7 +60,7 @@ class FAISSIndex:
         if faiss is None:
             raise ImportError("FAISS is required. Install with: pip install faiss-cpu or faiss-gpu")
     
-    def _try_enable_gpu(self, index: 'faiss.Index') -> 'faiss.Index':
+    def _try_enable_gpu(self, index: 'faiss.Index') -> 'faiss.Index':  # type: ignore[name-defined]
         if not self.config.faiss.use_gpu:
             return index
         
@@ -68,8 +68,8 @@ class FAISSIndex:
             return index
         
         try:
-            self.gpu_resources = faiss.StandardGpuResources()
-            gpu_index = faiss.index_cpu_to_gpu(
+            self.gpu_resources = faiss.StandardGpuResources()  # type: ignore[attr-defined]
+            gpu_index = faiss.index_cpu_to_gpu(  # type: ignore[attr-defined]
                 self.gpu_resources,
                 self.config.faiss.gpu_id,
                 index
@@ -85,9 +85,9 @@ class FAISSIndex:
         embeddings = np.ascontiguousarray(embeddings.astype(np.float32))
         
         if self.config.faiss.use_hnsw:
-            cpu_index = faiss.IndexHNSWFlat(self.embedding_dim, self.config.faiss.hnsw_m)
+            cpu_index = faiss.IndexHNSWFlat(self.embedding_dim, self.config.faiss.hnsw_m)  # type: ignore[attr-defined]
         else:
-            cpu_index = faiss.IndexFlatL2(self.embedding_dim)
+            cpu_index = faiss.IndexFlatL2(self.embedding_dim)  # type: ignore[attr-defined]
         
         cpu_index.add(embeddings)
         self.index = self._try_enable_gpu(cpu_index)
@@ -171,16 +171,16 @@ class FAISSIndex:
         path = path or self.config.paths.faiss_index_path
         index_to_save = self.index
         if self.using_gpu:
-            index_to_save = faiss.index_gpu_to_cpu(self.index)
+            index_to_save = faiss.index_gpu_to_cpu(self.index)  # type: ignore[attr-defined]
         
-        faiss.write_index(index_to_save, str(path))
+        faiss.write_index(index_to_save, str(path))  # type: ignore[attr-defined]
         with open(str(path) + '.mappings.pkl', 'wb') as f:
             pickle.dump({'song_ids': self.song_ids, 'idx_to_song': self.idx_to_song}, f)
         self.logger.log(f"Index saved to {path}", "INDEX", level="SUCCESS")
 
     def load(self, path: Optional[str] = None) -> None:
         path = path or self.config.paths.faiss_index_path
-        cpu_index = faiss.read_index(str(path))
+        cpu_index = faiss.read_index(str(path))  # type: ignore[attr-defined]
         # Important: For reconstruction to work reliably on some index types,
         # we might need to ensure it has potential direct map. 
         # But IndexFlatL2 (default) always supports it.
@@ -247,10 +247,10 @@ class MusicRecommendationEngine:
         except Exception as e:
             self.logger.log(f"Processor fit warning (Lite Mode?): {e}", "DATA", level="WARNING")
         
-        self.logger.log(f"Loaded {len(self.song_data)} songs", "DATA", level="SUCCESS")
+        self.logger.log(f"Loaded {len(self.song_data)} songs", "DATA", level="SUCCESS")  # type: ignore[arg-type]
 
     def _get_column_names(self) -> Tuple[str, str]:
-        cols = self.song_data.columns
+        cols = self.song_data.columns  # type: ignore[union-attr]
         if 'song' in cols: song_col = 'song'
         elif 'song_name' in cols: song_col = 'song_name'
         elif 'name' in cols: song_col = 'name'
@@ -327,7 +327,7 @@ class MusicRecommendationEngine:
         try:
             # Assuming dataframe index matches FAISS index ID
             # This is true if song_metadata.csv is a direct subset of training data without shuffle
-            song_idx = int(song_row.name)
+            song_idx = int(song_row.name)  # type: ignore[arg-type]
             embedding_np = self.faiss_index.reconstruct(song_idx)
             
             # Verify if reconstruction looks valid (not all zeros)
@@ -423,7 +423,7 @@ class MusicRecommendationEngine:
             filtered = filtered[(filtered['energy'] >= filters['energy'][0]) & (filtered['energy'] <= filters['energy'][1])]
         
         if 'Popularity' in filtered.columns:
-            filtered = filtered.sort_values('Popularity', ascending=False)
+            filtered = filtered.sort_values('Popularity', ascending=False)  # type: ignore[call-overload]
             
         song_col, artist_col = self._get_column_names()
         recommendations = []
@@ -449,8 +449,8 @@ class MusicRecommendationEngine:
         batch_size = self.config.training.batch_size
         self.model.eval()
         with torch.no_grad():
-            for i in range(0, len(self.song_data), batch_size):
-                batch_data = self.song_data.iloc[i:i+batch_size]
+            for i in range(0, len(self.song_data), batch_size):  # type: ignore[arg-type]
+                batch_data = self.song_data.iloc[i:i+batch_size]  # type: ignore[union-attr]
                 batch_embeddings = []
                 for _, row in batch_data.iterrows():
                     try:

@@ -88,7 +88,7 @@ def build_index(
     # ── Build FAISS index ─────────────────────────────────────────────────────
     print("[build_faiss] Building FAISS IndexFlatIP ...")
     index = faiss.IndexFlatIP(latent_dim)   # Inner product == cosine for L2-normed vectors
-    index.add(embeddings)
+    index.add(embeddings)  # type: ignore[call-arg]
     print(f"[build_faiss] FAISS index total vectors: {index.ntotal:,}")
 
     # ── Save index ────────────────────────────────────────────────────────────
