@@ -116,6 +116,32 @@ class CLIPAudioBridge:
         faiss.normalize_L2(emb_np)   # Unit-normalize → IP = cosine similarity ∈ [-1, 1]
         return emb_np
 
+    @staticmethod
+    def _relative_scores(distances: List[float], top_score: float = 0.95, bottom_score: float = 0.50) -> List[float]:
+        """
+        Convert raw cosine similarities to relative scores within a result set.
+
+        Because the AudioAutoencoder was trained for reconstruction (not
+        contrastive learning), its latent space is "collapsed" — all songs
+        sit very close together on the unit sphere (cosine sim ≈ 0.999).
+        Absolute similarity values are therefore meaningless for display.
+
+        This method rescales the best result to `top_score` and the worst
+        to `bottom_score`, preserving relative ranking while showing
+        a believable range (e.g. 95% → 50%).
+        """
+        if not distances:
+            return []
+        max_d = max(distances)
+        min_d = min(distances)
+        span = max_d - min_d
+        if span < 1e-9:   # All identical — give uniform mid score
+            return [round((top_score + bottom_score) / 2, 4)] * len(distances)
+        return [
+            round(bottom_score + (d - min_d) / span * (top_score - bottom_score), 4)
+            for d in distances
+        ]
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     def recommend_from_label(
@@ -137,19 +163,19 @@ class CLIPAudioBridge:
 
         distances, indices = self.faiss_index.search(query_emb, top_k)
 
+        raw_dists = [float(d) for d, i in zip(distances[0], indices[0]) if i >= 0 and i < len(self.mappings)]
+        valid_indices = [int(i) for i in indices[0] if i >= 0 and i < len(self.mappings)]
+        scores = self._relative_scores(raw_dists)
+
         results = []
-        for dist, idx in zip(distances[0], indices[0]):
-            if idx < 0 or idx >= len(self.mappings):
-                continue
+        for score, idx in zip(scores, valid_indices):
             song_meta = self.mappings[idx]
-            # dist is cosine similarity ∈ [-1, 1]; map to [0, 1] for display
-            similarity = float(max(0.0, min(1.0, (float(dist) + 1.0) / 2.0)))
             results.append({
                 "song":       song_meta.get("song", "Unknown"),
                 "artist":     song_meta.get("artist", "Unknown"),
                 "genre":      song_meta.get("genre", ""),
                 "emotion":    song_meta.get("emotion", ""),
-                "similarity": similarity,
+                "similarity": score,
             })
         return results
 
@@ -193,21 +219,27 @@ class CLIPAudioBridge:
         # Search (top_k + 1 to exclude the query itself)
         distances, indices = self.faiss_index.search(query_emb, top_k + 1)
 
-        results = []
+        raw_dists = []
+        valid_indices = []
         for dist, idx in zip(distances[0], indices[0]):
             if int(idx) == best_idx or idx < 0 or idx >= len(self.mappings):
                 continue
-            if len(results) >= top_k:
+            if len(raw_dists) >= top_k:
                 break
+            raw_dists.append(float(dist))
+            valid_indices.append(int(idx))
+
+        scores = self._relative_scores(raw_dists)
+
+        results = []
+        for score, idx in zip(scores, valid_indices):
             song_meta = self.mappings[idx]
-            # dist is cosine similarity ∈ [-1, 1]; map to [0, 1] for display
-            similarity = float(max(0.0, min(1.0, (float(dist) + 1.0) / 2.0)))
             results.append({
                 "song":       str(song_meta.get("song", "Unknown")),
                 "artist":     str(song_meta.get("artist", "Unknown")),
                 "genre":      str(song_meta.get("genre", "")),
                 "emotion":    str(song_meta.get("emotion", "")),
-                "similarity": similarity,
+                "similarity": score,
             })
 
         matched_song_meta = self.mappings[best_idx]

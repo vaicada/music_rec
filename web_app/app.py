@@ -41,6 +41,16 @@ import traceback
 import sys
 import os
 
+# Load .env file BEFORE any module that reads environment variables (database, auth, etc.)
+try:
+    from dotenv import load_dotenv
+    # Look for .env in project root (one level up from web_app/)
+    _env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    load_dotenv(_env_path)
+    print(f"[OK] Loaded .env from {_env_path}")
+except ImportError:
+    print("[WARNING] python-dotenv not installed. Environment variables must be set manually.")
+
 # Add parent directory to path to import hybrid_music_engine
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _web_app_dir  = os.path.dirname(os.path.abspath(__file__))
@@ -111,11 +121,13 @@ except Exception as db_import_err:
     # HTTP 503, so these stubs are never actually called in production.
     # ---------------------------------------------------------------------------
     def get_db():  # type: ignore[misc]
-        raise RuntimeError("Database not available")
-        yield  # make it a generator so FastAPI treats it as a dependency
+        """Stub: DB unavailable — yields nothing, raises proper HTTP 503."""
+        raise HTTPException(status_code=503, detail="Database not available. Auth & playlist features are disabled.")
+        yield  # makes Python treat this as a generator (required for FastAPI Depends)
 
     def get_current_user():  # type: ignore[misc]
-        raise RuntimeError("Auth not available")
+        """Stub: auth unavailable — raises HTTP 503 instead of crashing."""
+        raise HTTPException(status_code=503, detail="Authentication not available. Database is not configured.")
 
     def get_optional_user():  # type: ignore[misc]
         return None

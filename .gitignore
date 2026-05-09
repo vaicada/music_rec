@@ -121,3 +121,4 @@ NotebookLM_Source_Files/
 
 # ----- Agent config (local tooling) -----
 .agent/
+.agents/
