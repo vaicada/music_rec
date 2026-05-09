@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Music Recommender - Find Your Perfect Song</title>
     <meta name="description"
-        content="AI-powered music recommendation system. Find similar songs, discover music by mood or context.">
+        content="AI-powered music recommendation system. Find similar songs, discover music by mood or context, manage playlists.">
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -29,7 +29,19 @@
                 <a href="#" class="nav-link" data-mode="image">From Image</a>
                 <a href="#" class="nav-link" data-mode="mood">By Mood</a>
                 <a href="#" class="nav-link" data-mode="context">By Activity</a>
+                <a href="#" class="nav-link nav-link-auth" data-mode="history" id="navHistory" style="display:none">History</a>
+                <a href="#" class="nav-link nav-link-auth" data-mode="playlists" id="navPlaylists" style="display:none">Playlists</a>
             </nav>
+            <!-- Auth Button Area -->
+            <div class="auth-area" id="authArea">
+                <button class="btn-auth-login" id="btnOpenAuth" onclick="openAuthModal('login')">Login</button>
+            </div>
+            <!-- User Info (shown when logged in) -->
+            <div class="user-area hidden" id="userArea">
+                <span class="user-avatar" id="userAvatar">U</span>
+                <span class="user-name" id="userName"></span>
+                <button class="btn-logout" id="btnLogout" onclick="handleLogout()">Logout</button>
+            </div>
         </header>
 
         <!-- Hero Section -->
@@ -55,9 +67,7 @@
                 </div>
                 
                 <!-- Autocomplete Dropdown -->
-                <div id="autocompleteDropdown" class="autocomplete-dropdown hidden">
-                    <!-- Dynamic content will go here (recent searches / suggestions) -->
-                </div>
+                <div id="autocompleteDropdown" class="autocomplete-dropdown hidden"></div>
                 
                 <!-- Model Selection for Search -->
                 <div class="model-selection" id="searchModelSelection" style="margin-top: 1rem; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; text-align: center;">
@@ -74,8 +84,6 @@
                     </div>
                 </div>
             </div>
-
-
 
             <!-- Mood Section -->
             <div class="filter-container hidden" id="mood-mode">
@@ -184,6 +192,28 @@
                     </button>
                 </div>
             </div>
+
+            <!-- History Section -->
+            <div class="filter-container hidden" id="history-mode">
+                <div class="section-header-row">
+                    <h3 class="filter-title" style="margin-bottom:0">Search History</h3>
+                    <button class="btn-danger-sm" onclick="clearAllHistory()" id="btnClearHistory">Clear All</button>
+                </div>
+                <div id="historyList" class="history-list">
+                    <p class="empty-state">Loading history...</p>
+                </div>
+            </div>
+
+            <!-- Playlists Section -->
+            <div class="filter-container hidden" id="playlists-mode">
+                <div class="section-header-row">
+                    <h3 class="filter-title" style="margin-bottom:0">My Playlists</h3>
+                    <button class="btn-accent-sm" onclick="openCreatePlaylistModal()">+ New Playlist</button>
+                </div>
+                <div id="playlistsList" class="playlists-grid">
+                    <p class="empty-state">No playlists yet. Create one!</p>
+                </div>
+            </div>
         </section>
 
         <!-- Loading Spinner -->
@@ -217,6 +247,98 @@
                 </div>
             </div>
         </div>
+
+        <!-- Auth Modal (Login / Register) -->
+        <div class="modal hidden" id="authModal">
+            <div class="modal-backdrop" onclick="closeAuthModal()"></div>
+            <div class="modal-content modal-content-auth">
+                <button class="modal-close" onclick="closeAuthModal()">&times;</button>
+
+                <!-- Tab Toggle -->
+                <div class="auth-tabs">
+                    <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Login</button>
+                    <button class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Register</button>
+                </div>
+
+                <!-- Login Form -->
+                <div id="loginForm" class="auth-form">
+                    <h3 class="auth-title">Welcome Back 🎵</h3>
+                    <p class="auth-subtitle">Login to save your history & playlists</p>
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" id="loginUsername" class="form-input" placeholder="Enter username" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" id="loginPassword" class="form-input" placeholder="Enter password" autocomplete="current-password">
+                    </div>
+                    <p class="form-error hidden" id="loginError"></p>
+                    <button class="btn-auth-submit" id="btnLogin" onclick="handleLogin()">Login</button>
+                </div>
+
+                <!-- Register Form -->
+                <div id="registerForm" class="auth-form hidden">
+                    <h3 class="auth-title">Create Account 🎶</h3>
+                    <p class="auth-subtitle">Join to unlock history & personalized playlists</p>
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" id="regUsername" class="form-input" placeholder="Choose a username" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" id="regEmail" class="form-input" placeholder="your@email.com" autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" id="regPassword" class="form-input" placeholder="Min. 6 characters" autocomplete="new-password">
+                    </div>
+                    <p class="form-error hidden" id="registerError"></p>
+                    <button class="btn-auth-submit" id="btnRegister" onclick="handleRegister()">Create Account</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Playlist Modal -->
+        <div class="modal hidden" id="createPlaylistModal">
+            <div class="modal-backdrop" onclick="closeCreatePlaylistModal()"></div>
+            <div class="modal-content modal-content-sm">
+                <button class="modal-close" onclick="closeCreatePlaylistModal()">&times;</button>
+                <h3 class="modal-title-sm">New Playlist</h3>
+                <div class="form-group">
+                    <label class="form-label">Playlist Name</label>
+                    <input type="text" id="newPlaylistName" class="form-input" placeholder="My Awesome Playlist" maxlength="255">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description (optional)</label>
+                    <textarea id="newPlaylistDesc" class="form-input form-textarea" placeholder="A short description..." maxlength="500"></textarea>
+                </div>
+                <p class="form-error hidden" id="createPlaylistError"></p>
+                <button class="btn-auth-submit" onclick="handleCreatePlaylist()">Create Playlist</button>
+            </div>
+        </div>
+
+        <!-- Playlist Detail Modal -->
+        <div class="modal hidden" id="playlistDetailModal">
+            <div class="modal-backdrop" onclick="closePlaylistDetailModal()"></div>
+            <div class="modal-content modal-content-playlist">
+                <button class="modal-close" onclick="closePlaylistDetailModal()">&times;</button>
+                <div class="playlist-detail-header">
+                    <div>
+                        <h3 class="playlist-detail-title" id="playlistDetailName"></h3>
+                        <p class="playlist-detail-desc" id="playlistDetailDesc"></p>
+                    </div>
+                    <span class="playlist-track-count" id="playlistDetailCount"></span>
+                </div>
+                <div id="playlistTrackList" class="playlist-track-list"></div>
+            </div>
+        </div>
+
+        <!-- Add to Playlist Dropdown -->
+        <div class="playlist-picker hidden" id="playlistPicker">
+            <div class="playlist-picker-header">Add to Playlist</div>
+            <div id="playlistPickerList"></div>
+            <button class="playlist-picker-new" onclick="openCreatePlaylistModalFromPicker()">+ Create New Playlist</button>
+        </div>
     </div>
 
     <!-- Footer -->
@@ -224,7 +346,7 @@
         <p>Powered by Hybrid Music Recommendation Engine</p>
     </footer>
 
-    <script src="/static/js/main.js?v=3"></script>
+    <script src="/static/js/main.js?v=4"></script>
 </body>
 
 </html>
