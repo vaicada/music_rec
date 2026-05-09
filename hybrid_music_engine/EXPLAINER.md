@@ -1,4 +1,4 @@
-# 🧠 Giải thích Module `hybrid_music_engine/` — Model 1: BERT Hybrid
+ # 🧠 Giải thích Module `hybrid_music_engine/` — Model 1: BERT Hybrid
 
 > Module này là "bộ não" của Model 1 — kết hợp BERT (hiểu lời bài hát) với đặc trưng âm thanh để gợi ý nhạc.
 
@@ -91,6 +91,18 @@ class HybridMusicModel(nn.Module):
         return {'embedding': embedding}
 ```
 
+**🔍 Giải thích chi tiết Kiến trúc Model:**
+- **`nn.Linear` + `nn.GELU`**: Các lớp mạng nơ-ron truyền thẳng (Feed-Forward) sử dụng hàm kích hoạt GELU. GELU mượt mà hơn ReLU, thường cho hiệu suất tốt hơn trong các bài toán NLP và âm thanh hiện đại.
+- **`nn.LayerNorm` & `nn.BatchNorm1d`**: Chuẩn hóa dữ liệu ở mỗi tầng. Điều này giúp ngăn chặn triệt tiêu/bùng nổ gradient và giúp mô hình hội tụ nhanh hơn.
+- **`nn.Dropout(0.15 - 0.3)`**: Ngẫu nhiên vô hiệu hóa một số liên kết trong quá trình training. Điều này ép mô hình không được phụ thuộc vào 1 nơ-ron cụ thể nào, từ đó chống *overfitting* (học vẹt).
+- **`F.normalize(embedding, p=2, dim=-1)`**: Đây là bước cực kỳ quan trọng! Việc chuẩn hóa L2 đưa vector về độ dài bằng 1. Khi vector đã chuẩn hóa L2, việc tính khoảng cách Euclid (bằng FAISS) sẽ tương đương về mặt toán học với việc tính **Cosine Similarity** — thước đo chuẩn nhất để so sánh sự tương đồng của văn bản/âm thanh.
+
+**Luồng dữ liệu qua hàm `forward`:**
+- **Bước 1**: Đóng băng BERT (`torch.no_grad()`) và lấy vector `[CLS]` 768 chiều (đại diện cho ngữ nghĩa toàn bộ lời bài hát).
+- **Bước 2**: Đưa vector 768D qua mạng `bert_proj` để nén thông tin ngôn ngữ xuống còn 256 chiều.
+- **Bước 3**: Đưa 9 đặc trưng âm thanh gốc qua `audio_enc` để mở rộng lên không gian 64 chiều, giúp mô hình bắt được các điểm tương đồng phức tạp.
+- **Bước 4**: Ghép nối (concatenate) 2 luồng: `256D (text) + 64D (audio) = 320D`. Sau đó đẩy qua mạng `fusion` để nén lần cuối ra **vector 64D duy nhất** đại diện cho toàn bộ bài hát. Cuối cùng, chuẩn hóa L2 vector này trước khi trả về.
+
 ---
 
 ## 📄 File 2: `processors.py` — Xử lý dữ liệu (3 Processor)
@@ -152,6 +164,10 @@ class AudioProcessor:
                  "features": self.feature_names}
         json.dump(stats, open(path, 'w'))
 ```
+
+**🔍 Giải thích chi tiết AudioProcessor:**
+- Tại sao dùng **Z-score Normalization `(x - mean) / std`** thay vì Min-Max (0-1)? Các đặc trưng âm thanh như `tempo` (nhịp độ) hay `loudness` (âm lượng) thường chứa các giá trị ngoại lệ (outlier). Chuẩn hóa Z-score xử lý outlier tốt hơn và giữ nguyên phân phối gốc của dữ liệu.
+- Lưu ý kỹ thuật `+ 1e-8` khi tính `std` là một "trick" tiêu chuẩn để tránh lỗi Crash do chia cho 0 (khi một cột đặc trưng có tất cả các giá trị hoàn toàn bằng nhau).
 
 ### MetadataProcessor — Encode dữ liệu categorical
 
@@ -302,6 +318,11 @@ class MusicRecommendationEngine:
             )
         return embedding.cpu()
 ```
+
+**🔍 Giải thích chi tiết Engine Gợi ý:**
+- **Tối ưu tốc độ với `FAISS reconstruct`**: Thay vì phải đẩy bài hát gốc qua toàn bộ mạng Neural Network cực nặng, ta dùng `reconstruct(song_idx)` để lấy thẳng vector 64D đã lưu sẵn trong RAM của FAISS. Tốc độ lấy là $O(1)$ — gần như ngay lập tức.
+- **Cơ chế Fallback**: Dòng `except` dự phòng cho trường hợp bài hát mới do user tự nhập vào mà chưa có trong Database. Khi đó hệ thống mới chịu khó gọi hàm `_encode_song` để sinh vector từ đầu.
+- **Luật lọc cảm xúc tương thích (`compatible_emotions`)**: Việc gợi ý bài hát không chỉ dựa vào thuật toán vector cứng nhắc mà còn phải hợp tâm lý. Ví dụ: Người đang buồn (`sadness`) có thể nghe nhạc buồn hoặc nhạc tình yêu (`love`), nhưng tuyệt đối không nên gợi ý nhạc giận dữ (`anger`). Cơ chế hard-code này đảm bảo sự an toàn về mặt tâm lý cho người dùng.
 
 ---
 

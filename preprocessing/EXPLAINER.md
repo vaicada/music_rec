@@ -156,34 +156,53 @@ def clean_lyrics(text):
 
 ### Bước 7 — Tạo BERT Embeddings (`create_bert_embeddings`)
 
+**Tổng quan: Tại sao cần BERT?**
+Lời bài hát là văn bản, máy tính không hiểu được trực tiếp. BERT biến mỗi bài hát thành một vector 768 số thực (embedding) đại diện cho "ý nghĩa ngữ nghĩa" của lời bài hát đó. Hai bài hát có lời tương tự nhau sẽ có vector gần nhau trong không gian 768 chiều.
+
+**1. Chuẩn bị Dataset Wrapper (`LyricsDataset`)**
 ```python
 class LyricsDataset(Dataset):
     """Wrapper để đưa lời hàng loạt qua BERT."""
     def __getitem__(self, idx):
         text = self.texts[idx]
-        encoded = self.tokenizer(text, max_length=256, padding='max_length',
-                                 truncation=True, return_tensors='pt')
-        return {'input_ids': encoded['input_ids'].squeeze(0),
-                'attention_mask': encoded['attention_mask'].squeeze(0)}
+        encoded = self.tokenizer(text, 
+                                 max_length=256,       # Cắt tối đa 256 token
+                                 padding='max_length', # Pad bài ngắn hơn thành 256
+                                 truncation=True,      # Cắt bỏ phần dư thừa
+                                 return_tensors='pt')  # Trả về PyTorch tensor
+        return {'input_ids': encoded['input_ids'].squeeze(0),         # Mã số của từng token
+                'attention_mask': encoded['attention_mask'].squeeze(0)} # 1 = token thật, 0 = padding
+```
 
+**2. Load Model và chạy inference**
+```python
 def create_bert_embeddings(df, output_path, batch_size=32, device="cuda"):
     cleaned_lyrics = [clean_lyrics(t) for t in df['text'].tolist()]
 
+    # bert-base-uncased: Model BERT gốc của Google, không phân biệt hoa/thường
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     model     = BertModel.from_pretrained("bert-base-uncased")
+    
+    # .eval(): Tắt Dropout và BatchNorm, cần thiết khi chỉ trích xuất embedding (không train)
     model.to(device).eval()
 
     all_embeddings = []
+    # torch.no_grad(): Không tính gradient để tiết kiệm RAM và tăng tốc độ 
     with torch.no_grad():
         for batch in DataLoader(LyricsDataset(cleaned_lyrics, tokenizer), batch_size=32):
             outputs = model(input_ids=batch['input_ids'].to(device),
                             attention_mask=batch['attention_mask'].to(device))
-            # [CLS] token (vị trí 0) = đại diện toàn bộ bài hát
-            cls_emb = outputs.last_hidden_state[:, 0, :]  # shape: [B, 768]
+            
+            # Lấy [CLS] token (vị trí 0)
+            # BERT dùng token [CLS] để tổng hợp toàn bộ ngữ nghĩa của đoạn text
+            cls_emb = outputs.last_hidden_state[:, 0, :]  # shape: [Batch_size, 768]
             all_embeddings.append(cls_emb.cpu().numpy())
 
+    # Gộp tất cả batch lại thành ma trận 2D
     embeddings = np.vstack(all_embeddings)   # shape: (N_songs, 768)
-    np.save(output_path, embeddings)         # Lưu để dùng khi training
+    
+    # Lưu ra file .npy để tái sử dụng ở các bước huấn luyện sau
+    np.save(output_path, embeddings)         
 ```
 
 ---
