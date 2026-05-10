@@ -226,103 +226,150 @@ class MusicDataset(Dataset):
 
 ## 📄 File 3: `inference.py` — Engine gợi ý + FAISS
 
-Module này có 2 class chính:
+Module này chịu trách nhiệm biến các vector đặc trưng (embeddings) được sinh ra từ mô hình thành một hệ thống tìm kiếm và gợi ý âm nhạc thực tế. Khác với giai đoạn huấn luyện (chạy chậm để học), hệ thống này phải đảm bảo tốc độ phản hồi tính bằng mili-giây khi người dùng yêu cầu trên Web App. Module có 2 class chính:
 
-### FAISSIndex — Quản lý chỉ mục tìm kiếm
+### FAISSIndex — Quản lý chỉ mục tìm kiếm tốc độ cao
+
+FAISS (Facebook AI Similarity Search) là một thư viện của Meta dùng để tìm kiếm các vector giống nhau cực kỳ nhanh. Nếu không có FAISS, để tìm 1 bài giống với "Shape of You", bạn phải so sánh vector của nó với toàn bộ 500.000 bài hát khác (rất chậm). FAISS tổ chức lại các vector này vào một cấu trúc chỉ mục (index) giúp tìm kiếm tức thời.
 
 ```python
 class FAISSIndex:
     def create_index(self, embeddings, song_data):
         """Tạo FAISS index từ ma trận embedding."""
+        # Chuyển đổi dữ liệu sang định dạng C-contiguous (liên tục trong bộ nhớ RAM)
+        # Đây là yêu cầu bắt buộc của FAISS vì thư viện lõi viết bằng C++
         embeddings = np.ascontiguousarray(embeddings.astype(np.float32))
 
-        # IndexFlatL2: tìm kiếm chính xác 100%, dùng khoảng cách L2
+        # IndexFlatL2: Cấu trúc tìm kiếm vét cạn (brute-force) nhưng được tối ưu hóa SIMD
+        # Đảm bảo tìm kiếm chính xác 100%, dùng khoảng cách L2 (Euclid)
+        # Do trước đó embeddings đã được L2-normalize, khoảng cách này tỷ lệ nghịch với Cosine Similarity
         cpu_index = faiss.IndexFlatL2(self.embedding_dim)
+        
+        # Thêm toàn bộ các vector bài hát vào chỉ mục
         cpu_index.add(embeddings)
 
         self.index = cpu_index
-        self._build_mappings(song_data)  # Xây dựng bảng index → info bài hát
+        # Xây dựng bảng ánh xạ (mappings) giữa số thứ tự index và thông tin thực của bài hát
+        self._build_mappings(song_data)
 
     def search(self, query_embedding, top_k=10):
         """Tìm top-k bài tương tự nhất."""
+        # FAISS search trả về 2 mảng:
+        # 1. distances: khoảng cách L2 từ câu truy vấn đến kết quả
+        # 2. indices: vị trí (ID) của bài hát trong index
         distances, indices = self.index.search(query_embedding.reshape(1, -1), top_k)
+        
+        # Biến đổi kết quả ID thành thông tin bài hát thực tế
         return [(idx, float(dist), self.idx_to_song[idx])
                 for dist, idx in zip(distances[0], indices[0]) if idx >= 0]
 
+    def reconstruct(self, idx):
+        """
+        Lấy lại vector 64D của bài hát trực tiếp từ RAM của FAISS.
+        Tránh việc phải gọi qua Model sinh lại.
+        """
+        return self.index.reconstruct(int(idx))
+        
     def save(self, path):
+        # Lưu cấu trúc FAISS thành file nhị phân (.bin) siêu nhẹ
         faiss.write_index(self.index, str(path))
-        # Lưu kèm mappings (index_pos → song info)
+        # Lưu kèm file Mappings (.pkl) để tra cứu tên bài hát
         pickle.dump({'song_ids': self.song_ids, 'idx_to_song': self.idx_to_song},
                     open(str(path) + '.mappings.pkl', 'wb'))
 ```
 
+**🔍 Giải thích Kỹ thuật FAISS:**
+- **Tại sao lại ép kiểu `np.ascontiguousarray(embeddings.astype(np.float32))`?** Các mảng Numpy trong Python có thể lưu trữ rải rác trong bộ nhớ (fragmented). FAISS là một thư viện C++ hiệu năng cao, nó đòi hỏi dữ liệu phải nằm thành một khối bộ nhớ liên tục (contiguous) kiểu số thực 32-bit (float32). Lệnh này dọn dẹp và chuẩn bị bộ nhớ để nạp vào lõi C++ của FAISS.
+- **`IndexFlatL2`**: Là kiểu Index tính khoảng cách Euclid (L2) chuẩn xác nhất. Dù FAISS có nhiều loại Index khác như HNSW hay IVFPQ (nhanh hơn nhưng có sai số), với 500k bài hát, `IndexFlatL2` vẫn đáp ứng tốc độ vài mili-giây mà lại không làm giảm chất lượng gợi ý.
+- **Mapping (Ánh xạ)**: FAISS chỉ biết các vector dưới dạng ID từ `0` đến `499,999`. Nó hoàn toàn không biết ID `1` là bài "Shape of You". Do đó, ta cần một bộ từ điển `idx_to_song` đi kèm để sau khi FAISS trả về ID, ta "dịch" nó lại thành tên bài hát.
+
 ### MusicRecommendationEngine — API gợi ý cấp cao
+
+Đây là Class gom tất cả lại: Model + FAISS + Xử lý Logic Nghiệp Vụ, cung cấp hàm giao tiếp cuối cùng cho Web Server.
 
 ```python
 class MusicRecommendationEngine:
     def get_similar_songs(self, song_name, artist_name=None, top_k=5):
-        # Bước 1: Tìm bài hát trong database
+        # Bước 1: Tìm bài hát trong database (Bằng hàm fuzzy/exact match tự viết)
         song_row = self._find_song(song_name, artist_name)
 
-        # Bước 2: Tối ưu — lấy vector từ FAISS (không cần encode lại)
+        # Bước 2: Tối ưu Tốc Độ Nhất — lấy vector gốc từ RAM
         try:
+            # Nếu bài hát đã có sẵn trong tập data 500k bài,++
+            # Ta KHÔNG cần chạy qua mô hình AI chậm chạp,
+            # Chỉ cần rút vector 64D thẳng từ bộ nhớ FAISS
             song_idx   = int(song_row.name)
-            embedding  = self.faiss_index.reconstruct(song_idx)
+            embedding_np  = self.faiss_index.reconstruct(song_idx)
         except:
-            # Fallback: encode từ đầu nếu reconstruct thất bại
-            embedding = self._encode_song(song_row).numpy().squeeze()
+            # Fallback: Chỉ khi bài hát mới 100% người dùng tự nhập (không có trong data)
+            # Thì mới gọi BERT và Neural Net để dịch từ đầu mất ~100ms
+            embedding = self._encode_song(song_row)
+            embedding_np = embedding.numpy().squeeze()
 
-        # Bước 3: Tìm kiếm FAISS
-        candidates = self.faiss_index.search(embedding, top_k * 3 + 1)
+        # Bước 3: Tìm kiếm trên FAISS (Tìm nhiều hơn cần thiết 3 lần để phòng hờ lọc)
+        candidates = self.faiss_index.search(embedding_np, top_k * 3 + 1)
 
-        # Bước 4: Lọc theo cảm xúc tương thích
+        # Bước 4: Lọc theo cảm xúc tương thích (Luật Hard-code)
+        # Tránh trường hợp đang nghe nhạc Vui (Joy) lại gợi ý nhạc Tức Giận (Anger)
+        query_emotion = song_row.get('emotion', '').lower()
         compatible_emotions = {
             'joy':     ['joy', 'love', 'surprise', 'anger'],
             'sadness': ['sadness', 'love', 'fear'],
             'anger':   ['anger', 'joy', 'fear'],
             'love':    ['love', 'joy', 'sadness'],
+            'fear':    ['fear', 'sadness', 'anger'],
         }
-        allowed = compatible_emotions.get(song_row.get('emotion', '').lower(), [])
+        allowed = compatible_emotions.get(query_emotion, [])
 
         recommendations = []
         for idx, distance, song_info in candidates:
-            if song_info['song'].lower() == song_name.lower(): continue  # Bỏ qua chính nó
-            if allowed and song_info.get('emotion', '') not in allowed: continue
+            # Bỏ qua chính bài hát gốc đang truy vấn (Vd: Search "Shape of you" thì ko gợi ý lại "Shape of you")
+            if str(song_info['song']).lower() == song_name.lower(): continue  
+            
+            # Nếu vi phạm luật cảm xúc -> Loại bài này
+            if allowed and song_info.get('emotion', '').lower() not in allowed: continue
 
-            similarity = 1.0 / (1.0 + distance)   # Chuyển L2 distance → similarity
+            # Chuyển Khoảng cách L2 (Càng nhỏ càng giống) thành Điểm Tương Đồng (Càng lớn càng giống, Max = 1.0)
+            similarity = 1.0 / (1.0 + distance)   
+            
             recommendations.append({
-                'song': song_info['song'], 'artist': song_info['artist'],
+                'song': song_info['song'], 
+                'artist': song_info['artist'],
                 'similarity': round(similarity, 4),
                 'emotion': song_info.get('emotion', '')
             })
+            # Lấy đủ top_k bài thì dừng
             if len(recommendations) >= top_k: break
 
         return recommendations
 
     def _encode_song(self, song_row):
-        """Encode một bài hát thành vector 64D."""
-        # Lấy và làm sạch lời
+        """Dịch 1 bài hát chưa từng xuất hiện thành vector 64D (Rất chậm)."""
+        # Bước A: Làm sạch và chuẩn bị Lời bài hát
         lyrics       = self.text_processor.clean_lyrics(song_row.get('text', ''))
-        combined_txt = self.text_processor.combine_text_features(lyrics, ...)
+        emotion      = str(song_row.get('emotion', ''))
+        genre        = str(song_row.get('genre', ''))
+        combined_txt = self.text_processor.combine_text_features(lyrics, emotion, genre)
         text_encoded = self.text_processor.tokenize_single(combined_txt)
 
-        # Lấy đặc trưng âm thanh
+        # Bước B: Xử lý 9 chỉ số âm thanh
         audio_features = self.audio_processor.transform(pd.DataFrame([song_row]))
 
-        # Chạy qua model → lấy embedding 64D
-        with torch.no_grad():
+        # Bước C: Đẩy qua Mô hình Hybrid
+        with torch.no_grad(): # Tắt tính toán đạo hàm (Gradient) để tăng tốc bộ nhớ
             embedding = self.model.get_embedding(
-                input_ids=text_encoded['input_ids'].to(device),
-                attention_mask=text_encoded['attention_mask'].to(device),
-                audio_features=audio_features.to(device),
+                input_ids=text_encoded['input_ids'].to(self.device),
+                attention_mask=text_encoded['attention_mask'].to(self.device),
+                audio_features=audio_features.to(self.device),
             )
-        return embedding.cpu()
+        return embedding.cpu() # Đưa vector từ GPU RAM về System RAM
 ```
 
-**🔍 Giải thích chi tiết Engine Gợi ý:**
-- **Tối ưu tốc độ với `FAISS reconstruct`**: Thay vì phải đẩy bài hát gốc qua toàn bộ mạng Neural Network cực nặng, ta dùng `reconstruct(song_idx)` để lấy thẳng vector 64D đã lưu sẵn trong RAM của FAISS. Tốc độ lấy là $O(1)$ — gần như ngay lập tức.
-- **Cơ chế Fallback**: Dòng `except` dự phòng cho trường hợp bài hát mới do user tự nhập vào mà chưa có trong Database. Khi đó hệ thống mới chịu khó gọi hàm `_encode_song` để sinh vector từ đầu.
-- **Luật lọc cảm xúc tương thích (`compatible_emotions`)**: Việc gợi ý bài hát không chỉ dựa vào thuật toán vector cứng nhắc mà còn phải hợp tâm lý. Ví dụ: Người đang buồn (`sadness`) có thể nghe nhạc buồn hoặc nhạc tình yêu (`love`), nhưng tuyệt đối không nên gợi ý nhạc giận dữ (`anger`). Cơ chế hard-code này đảm bảo sự an toàn về mặt tâm lý cho người dùng.
+**🔍 Giải thích chi tiết Engine Gợi ý (Logic Nghiệp vụ):**
+- **Sự lợi hại của `reconstruct()`**: Thay vì phải đẩy bài hát gốc qua toàn bộ mạng Neural Network 110 triệu tham số của BERT, hàm `reconstruct(song_idx)` móc vector 64D trực tiếp trong RAM (đã được lưu sẵn trong lúc Build Index). Tốc độ lấy là $O(1)$ — chưa tới 1 mili-giây. Đây là kỹ thuật sống còn để triển khai ứng dụng thực tế.
+- **Cơ chế Fallback (`except`)**: Nếu người dùng nhập vào một lời bài hát tự chế, nó không nằm trong 500,000 bài có sẵn, lúc đó hàm `_encode_song` mới được gọi. Hàm này thực hiện đúng chuỗi `Làm Sạch -> Tokenize -> Audio Transform -> Model Forward`. Do dùng `torch.no_grad()`, nó tốn ít RAM nhưng thời gian sẽ mất khoảng ~100-200ms.
+- **Lọc cảm xúc cứng (Rule-based Filtering)**: Các thuật toán AI đôi lúc rất "ngu ngốc". Một bài hát có giai điệu vui nhưng lời nhắc tới cái chết có thể bị xếp nhầm vector gần một bài nhạc buồn. Để bảo vệ trải nghiệm cảm xúc của người dùng, ta áp dụng một lớp luật *hard-code* (`compatible_emotions`). Lớp luật này cấm ngặt việc chuyển đột ngột từ nhạc Sadness sang nhạc Anger, đóng vai trò như một màng lọc an toàn.
+- **Công thức `similarity = 1.0 / (1.0 + distance)`**: Trong FAISS `IndexFlatL2`, nếu hai vector y hệt nhau, khoảng cách = `0`. Nhưng con người thì thích xem "Độ tương đồng 100%". Công thức trên biến số `0` thành `1.0` (Tương đồng tối đa), và biến khoảng cách xa (ví dụ `3.0`) thành một số điểm nhỏ dần (ví dụ `0.25`).
 
 ---
 
