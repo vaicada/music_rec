@@ -562,6 +562,176 @@ async def autocomplete(
     return unique_songs
 
 
+# =============================================================================
+# Song Search — find songs by name (Step 1 of Search-First flow)
+# =============================================================================
+
+# Keywords that indicate a non-original version. Used to push remixes/covers
+# below originals in the search result ranking.
+_REMIX_KEYWORDS: list[str] = [
+    "remix", "remixed", "edit", "version", "ver.", "mix",
+    "cover", "covered", "instrumental", "acoustic",
+    "live", "live at", "live from", "remaster", "remastered",
+    "extended", "radio edit", "club mix", "feat.", "ft.",
+    "mashup", "bootleg", "dub", "vip", "flip",
+    "(reprise)", "reprise", "karaoke", "tribute", "demo",
+]
+
+
+def _is_remix(song_name: str) -> bool:
+    """Return True if song_name looks like a remix, cover, or non-original."""
+    name_lower = song_name.lower()
+    return any(kw in name_lower for kw in _REMIX_KEYWORDS)
+
+
+class SongSearchItem(BaseModel):
+    """One item in a song-search response."""
+    song: str
+    artist: str
+    genre: str
+    emotion: str
+    is_remix: bool = False
+
+
+class SongSearchResponse(BaseModel):
+    """Response model for /api/song-search."""
+    query: str
+    results: List[SongSearchItem]
+    total: int
+    originals_count: int
+    remixes_count: int
+
+
+@app.get("/api/song-search", response_model=SongSearchResponse)
+async def song_search(
+    q: str = Query(..., description="Song name query (prefix or contains)"),
+    artist: Optional[str] = Query(None, description="Optional artist name filter"),
+    model: str = Query("model1", description="Dataset source: model1 or model2"),
+):
+    """
+    Search songs by name in the dataset.
+
+    Returns ALL matching songs (not similar-songs), sorted:
+      1. Originals first (alphabetically within group)
+      2. Remixes / covers / live versions second (alphabetically within group)
+
+    Matching strategy:
+      - Prefix matches (song starts with query) come before contains matches
+      - Artist filter (optional) applied after matching
+      - Pagination is handled client-side
+
+    Used as Step 1 of the Search-First recommendation flow.
+    """
+    query = q.strip().lower()
+    if not query:
+        return SongSearchResponse(
+            query=q, results=[], total=0, originals_count=0, remixes_count=0
+        )
+
+    raw_results: list[dict] = []
+
+    if model == "model2":
+        # ── Model 2: Audio-Only dataset ───────────────────────────────────────
+        if audio_bridge is None or getattr(audio_bridge, "mappings", None) is None:
+            raise HTTPException(status_code=503, detail="Model 2 (Audio-Only) not available")
+
+        seen: set[str] = set()
+        prefix_matches: list[dict] = []
+        contains_matches: list[dict] = []
+
+        for meta in audio_bridge.mappings:
+            song_name = str(meta.get("song", "")).strip()
+            artist_name = clean_artist_name(meta.get("artist", ""))
+            key = f"{song_name.lower()}::{artist_name.lower()}"
+            if key in seen:
+                continue
+
+            name_lower = song_name.lower()
+            if name_lower.startswith(query):
+                seen.add(key)
+                prefix_matches.append({"song": song_name, "artist": artist_name,
+                                        "genre": str(meta.get("genre", "")),
+                                        "emotion": str(meta.get("emotion", ""))})
+            elif query in name_lower:
+                seen.add(key)
+                contains_matches.append({"song": song_name, "artist": artist_name,
+                                          "genre": str(meta.get("genre", "")),
+                                          "emotion": str(meta.get("emotion", ""))})
+
+        raw_results = prefix_matches + contains_matches
+
+    else:
+        # ── Model 1: Hybrid dataset ───────────────────────────────────────────
+        if engine is None or engine.song_data is None:
+            raise HTTPException(status_code=503, detail="Recommendation engine not initialized")
+
+        song_col, artist_col = engine._get_column_names()
+        genre_col = "genre" if "genre" in engine.song_data.columns else None
+        emotion_col = "emotion" if "emotion" in engine.song_data.columns else None
+
+        df = engine.song_data
+        song_lower = df[song_col].str.lower().fillna("")
+
+        prefix_df = df[song_lower.str.startswith(query, na=False)]
+        contains_df = df[song_lower.str.contains(query, regex=False, na=False)]
+        # contains_df already includes prefix matches; exclude them to avoid dups
+        contains_only_df = contains_df[~contains_df.index.isin(prefix_df.index)]
+
+        seen_keys: set[str] = set()
+
+        def _row_to_dict(row: "pd.Series") -> Optional[dict]:  # type: ignore[name-defined]
+            sn = str(row.get(song_col, "")).strip()
+            an = clean_artist_name(str(row.get(artist_col, "")))
+            key = f"{sn.lower()}::{an.lower()}"
+            if key in seen_keys:
+                return None
+            seen_keys.add(key)
+            return {
+                "song": sn,
+                "artist": an,
+                "genre": str(row.get(genre_col, "")) if genre_col else "",
+                "emotion": str(row.get(emotion_col, "")) if emotion_col else "",
+            }
+
+        prefix_results: list[dict] = []
+        for _, row in prefix_df.iterrows():
+            d = _row_to_dict(row)
+            if d:
+                prefix_results.append(d)
+
+        contains_results: list[dict] = []
+        for _, row in contains_only_df.iterrows():
+            d = _row_to_dict(row)
+            if d:
+                contains_results.append(d)
+
+        raw_results = prefix_results + contains_results
+
+    # ── Artist filter (optional) ──────────────────────────────────────────────
+    if artist:
+        artist_lower = artist.strip().lower()
+        raw_results = [r for r in raw_results if artist_lower in r["artist"].lower()]
+
+    # ── Attach is_remix flag ──────────────────────────────────────────────────
+    for r in raw_results:
+        r["is_remix"] = _is_remix(r["song"])
+
+    # ── Sort: originals first, remixes second; alphabetical within each group ─
+    originals = sorted([r for r in raw_results if not r["is_remix"]], key=lambda x: x["song"].lower())
+    remixes   = sorted([r for r in raw_results if r["is_remix"]],     key=lambda x: x["song"].lower())
+    sorted_results = originals + remixes
+
+    items = [SongSearchItem(**r) for r in sorted_results]
+
+    return SongSearchResponse(
+        query=q,
+        results=items,
+        total=len(items),
+        originals_count=len(originals),
+        remixes_count=len(remixes),
+    )
+
+
 @app.get("/api/search", response_model=SearchResponse)
 async def search_songs(
     q: str = Query(..., description="Song name to search for"),

@@ -216,6 +216,71 @@
             </div>
         </section>
 
+        <!-- ================================================================
+             Search Results Section (Step 1 — songs matching the query)
+             ================================================================ -->
+        <section class="search-results-section hidden" id="searchResultsSection"
+                 aria-label="Song search results">
+
+            <!-- Back button + breadcrumb -->
+            <div class="search-results-breadcrumb hidden" id="searchResultsBreadcrumb">
+                <button class="btn-back" id="btnBackToSearch" onclick="showSearchResultsView()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    Back to search results
+                </button>
+                <span class="breadcrumb-sep">›</span>
+                <span class="breadcrumb-current" id="breadcrumbCurrent"></span>
+            </div>
+
+            <!-- Header row: title + total count -->
+            <div class="search-results-header">
+                <div class="search-results-meta">
+                    <h2 class="search-results-title" id="searchResultsTitle">Search Results</h2>
+                    <span class="search-results-count" id="searchResultsCount"></span>
+                </div>
+                <!-- Stats: "52 originals · 35 remixes" -->
+                <div class="search-results-stats" id="searchResultsStats"></div>
+            </div>
+
+            <!-- Hint -->
+            <p class="search-results-hint">
+                🎯 Click on a song to find similar recommendations
+            </p>
+
+            <!-- Compact song list -->
+            <div class="search-results-list" id="searchResultsList">
+                <!-- createSearchResultCard() cards injected here -->
+            </div>
+
+            <!-- Pagination bar -->
+            <nav class="pagination" id="searchPagination"
+                 aria-label="Search results pages">
+                <button id="paginationPrev" class="pagination-btn pagination-prev"
+                        onclick="goToSearchPage(state.searchPage - 1)"
+                        aria-label="Previous page">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    Prev
+                </button>
+                <div class="pagination-pages" id="paginationPages" role="group"
+                     aria-label="Page numbers"></div>
+                <button id="paginationNext" class="pagination-btn pagination-next"
+                        onclick="goToSearchPage(state.searchPage + 1)"
+                        aria-label="Next page">
+                    Next
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+            </nav>
+        </section>
+
         <!-- Loading Spinner -->
         <div class="loading hidden" id="loading">
             <div class="spinner"></div>
@@ -346,7 +411,7 @@
         <p>Powered by Hybrid Music Recommendation Engine</p>
     </footer>
 
-    <script src="/static/js/main.js?v=4"></script>
+    <script src="/static/js/main.js?v=6"></script>
 </body>
 
 </html>

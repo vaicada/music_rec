@@ -19,7 +19,17 @@ const state = {
     // Playlists
     playlists: [],
     currentPickerSong: null, // song being added to playlist
+    // Search-First Flow
+    allSearchResults: [],   // full list from /api/song-search (client-side pagination)
+    searchPage: 1,          // current page (1-indexed)
+    totalSearchPages: 0,    // computed from allSearchResults.length
+    lastSearchQuery: '',    // remembered to restore on back
+    lastSearchArtist: '',   // remembered to restore on back
+    selectedSong: null,     // { song, artist } of the song whose recommendations are shown
 };
+
+// Number of search result cards shown per page
+const SEARCH_PAGE_SIZE = 12;
 
 // =============================================================================
 // DOM Elements
@@ -32,7 +42,19 @@ const elements = {
     searchBtn: () => document.getElementById('searchBtn'),
     autocompleteDropdown: () => document.getElementById('autocompleteDropdown'),
 
-    // Results
+    // Search-First: search results section
+    searchResultsSection: () => document.getElementById('searchResultsSection'),
+    searchResultsList: () => document.getElementById('searchResultsList'),
+    searchResultsTitle: () => document.getElementById('searchResultsTitle'),
+    searchResultsCount: () => document.getElementById('searchResultsCount'),
+    searchResultsStats: () => document.getElementById('searchResultsStats'),
+    searchResultsBreadcrumb: () => document.getElementById('searchResultsBreadcrumb'),
+    breadcrumbCurrent: () => document.getElementById('breadcrumbCurrent'),
+    paginationPrev: () => document.getElementById('paginationPrev'),
+    paginationNext: () => document.getElementById('paginationNext'),
+    paginationPages: () => document.getElementById('paginationPages'),
+
+    // Results (recommendations)
     loading: () => document.getElementById('loading'),
     resultsSection: () => document.getElementById('resultsSection'),
     resultsGrid: () => document.getElementById('resultsGrid'),
@@ -205,11 +227,16 @@ async function handleAutocompleteInput() {
 
 function selectAutocomplete(song, artist) {
     elements.searchInput().value = song;
-    elements.artistInput().value = artist;
+    elements.artistInput().value = artist || '';
     elements.autocompleteDropdown().classList.add('hidden');
-    handleSearch();
+    handleSearch(); // goes through song-search → results list
 }
 
+/**
+ * Step 1 of the Search-First flow.
+ * Calls /api/song-search → shows matching songs list with pagination.
+ * User then clicks a card to trigger findSimilarSongs() (Step 2).
+ */
 async function handleSearch() {
     const query = elements.searchInput().value.trim();
     const artist = elements.artistInput().value.trim();
@@ -225,34 +252,348 @@ async function handleSearch() {
     }
 
     showLoading();
+    // Hide any previous recommendation results
+    hideResults();
+    // Hide search results section while loading
+    if (elements.searchResultsSection()) {
+        elements.searchResultsSection().classList.add('hidden');
+    }
+
+    try {
+        const url = new URL('/api/song-search', window.location.origin);
+        url.searchParams.set('q', query);
+        if (artist) url.searchParams.set('artist', artist);
+        url.searchParams.set('model', selectedModel);
+
+        const response = await fetch(url.toString());
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || 'Song search failed');
+        }
+
+        // Save to state for pagination + back navigation
+        state.allSearchResults = data.results || [];
+        state.searchPage = 1;
+        state.totalSearchPages = Math.ceil(state.allSearchResults.length / SEARCH_PAGE_SIZE);
+        state.lastSearchQuery = query;
+        state.lastSearchArtist = artist;
+        state.selectedSong = null;
+
+        if (state.allSearchResults.length === 0) {
+            showToast(`No songs found for "${query}"`, 'warning');
+            hideLoading();
+            return;
+        }
+
+        // Render the search results section
+        const modelName = selectedModel === 'model2' ? 'Model 2 (Audio-Only)' : 'Model 1 (Hybrid)';
+        displaySearchResults(data, modelName);
+        updateRecentSearches(query, artist);
+        elements.autocompleteDropdown().classList.add('hidden');
+
+    } catch (error) {
+        console.error('Song search error:', error);
+        showToast(error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+// =============================================================================
+// Search-First Flow — Step 1: Display matching songs
+// =============================================================================
+
+/**
+ * Renders the search results section header + first page.
+ * @param {object} data  - API response from /api/song-search
+ * @param {string} modelName - human-readable model label
+ */
+function displaySearchResults(data, modelName) {
+    const section = elements.searchResultsSection();
+    if (!section) return;
+
+    // Update header
+    const query = data.query || state.lastSearchQuery;
+    elements.searchResultsTitle().textContent = `Results for "${query}"`;
+    elements.searchResultsCount().textContent =
+        `${data.total} song${data.total !== 1 ? 's' : ''} · ${modelName}`;
+
+    // Stats: originals · remixes
+    const statsEl = elements.searchResultsStats();
+    if (statsEl) {
+        statsEl.innerHTML = [
+            data.originals_count > 0
+                ? `<span class="stats-original-dot"></span>${data.originals_count} original${data.originals_count !== 1 ? 's' : ''}`
+                : null,
+            data.remixes_count > 0
+                ? `<span class="stats-remix-dot"></span>${data.remixes_count} remix${data.remixes_count !== 1 ? 'es' : ''}`
+                : null,
+        ].filter(Boolean).join(' &middot; ');
+    }
+
+    // Hide breadcrumb (only visible when showing recommendations)
+    const breadcrumb = elements.searchResultsBreadcrumb();
+    if (breadcrumb) breadcrumb.classList.add('hidden');
+
+    // Show hint
+    const hint = section.querySelector('.search-results-hint');
+    if (hint) hint.classList.remove('hidden');
+
+    section.classList.remove('hidden');
+    displaySearchPage(1);
+}
+
+/**
+ * Renders page `page` of state.allSearchResults into the list + updates pagination.
+ * @param {number} page - 1-indexed page number
+ */
+function displaySearchPage(page) {
+    if (page < 1 || (state.totalSearchPages > 0 && page > state.totalSearchPages)) return;
+
+    state.searchPage = page;
+    const start = (page - 1) * SEARCH_PAGE_SIZE;
+    const pageItems = state.allSearchResults.slice(start, start + SEARCH_PAGE_SIZE);
+
+    const list = elements.searchResultsList();
+    if (!list) return;
+
+    list.innerHTML = pageItems
+        .map((song, i) => createSearchResultCard(song, start + i))
+        .join('');
+
+    // Staggered entrance animation
+    list.querySelectorAll('.search-result-card').forEach((card, i) => {
+        card.style.animationDelay = `${i * 30}ms`;
+        card.classList.add('entering');
+    });
+
+    renderPagination(page, state.totalSearchPages);
+
+    // Scroll to top of the search results section
+    const section = elements.searchResultsSection();
+    if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+/**
+ * Navigate to a given page (called by pagination buttons).
+ * @param {number} page
+ */
+function goToSearchPage(page) {
+    if (page < 1 || page > state.totalSearchPages) return;
+    displaySearchPage(page);
+}
+
+/**
+ * Renders the pagination bar.
+ * Shows up to 5 page numbers in a sliding window with ellipsis.
+ * @param {number} current - current page (1-indexed)
+ * @param {number} total   - total pages
+ */
+function renderPagination(current, total) {
+    const prev = elements.paginationPrev();
+    const next = elements.paginationNext();
+    const pages = elements.paginationPages();
+    const nav = document.getElementById('searchPagination');
+
+    if (!prev || !next || !pages) return;
+
+    // Hide pagination if only 1 page
+    if (total <= 1) {
+        if (nav) nav.classList.add('hidden');
+        return;
+    }
+    if (nav) nav.classList.remove('hidden');
+
+    prev.disabled = current <= 1;
+    next.disabled = current >= total;
+
+    // Build page number buttons (sliding window of 5)
+    const WINDOW = 5;
+    let startPage = Math.max(1, current - Math.floor(WINDOW / 2));
+    let endPage   = Math.min(total, startPage + WINDOW - 1);
+    // Shift window if at the end
+    if (endPage - startPage < WINDOW - 1) {
+        startPage = Math.max(1, endPage - WINDOW + 1);
+    }
+
+    let html = '';
+    if (startPage > 1) {
+        html += `<button class="pagination-page" onclick="goToSearchPage(1)">1</button>`;
+        if (startPage > 2) html += `<span class="pagination-ellipsis">…</span>`;
+    }
+    for (let p = startPage; p <= endPage; p++) {
+        html += `<button class="pagination-page${p === current ? ' active' : ''}" 
+                    onclick="goToSearchPage(${p})"
+                    aria-label="Page ${p}"
+                    aria-current="${p === current ? 'page' : 'false'}">${p}</button>`;
+    }
+    if (endPage < total) {
+        if (endPage < total - 1) html += `<span class="pagination-ellipsis">…</span>`;
+        html += `<button class="pagination-page" onclick="goToSearchPage(${total})">${total}</button>`;
+    }
+    pages.innerHTML = html;
+}
+
+/**
+ * Creates a compact search-result card HTML string.
+ * Click → findSimilarSongs(); Play button → playSong().
+ */
+function createSearchResultCard(song, globalIndex) {
+    const songE   = escapeHtml(song.song);
+    const artistE = escapeHtml(song.artist);
+    const genreE  = escapeHtml(song.genre || '');
+    const rankNum = globalIndex + 1;
+
+    const badge = song.is_remix
+        ? '<span class="tag-remix">Remix</span>'
+        : '<span class="tag-original">Original</span>';
+
+    const genreTag = genreE
+        ? `<span class="src-genre-tag">${genreE}</span>`
+        : '';
+
+    return `
+        <div class="search-result-card"
+             role="button"
+             tabindex="0"
+             aria-label="${songE} by ${artistE} — click to find similar songs"
+             onclick="findSimilarSongs('${songE}', '${artistE}')"
+             onkeydown="if(event.key==='Enter'||event.key===' ')findSimilarSongs('${songE}','${artistE}')">
+            <span class="src-rank">${rankNum}</span>
+            <div class="src-info">
+                <div class="src-song-name" title="${songE}">${songE}</div>
+                <div class="src-artist">${artistE}</div>
+            </div>
+            <div class="src-tags">
+                ${badge}
+                ${genreTag}
+            </div>
+            <button class="src-play-btn"
+                    title="Play on YouTube"
+                    aria-label="Play ${songE} on YouTube"
+                    onclick="event.stopPropagation(); playSong('${songE}', '${artistE}')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z"/>
+                </svg>
+            </button>
+            <svg class="src-arrow" width="16" height="16" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+        </div>`;
+}
+
+// =============================================================================
+// Search-First Flow — Step 2: Recommendations for the selected song
+// =============================================================================
+
+/**
+ * Step 2: fetch /api/search for similar songs to the clicked song,
+ * display them in the main results section, and show the Back button.
+ */
+async function findSimilarSongs(song, artist) {
+    state.selectedSong = { song, artist };
+
+    const searchModelInput = document.querySelector('input[name="searchModel"]:checked');
+    const selectedModel = searchModelInput ? searchModelInput.value : 'model1';
+
+    showLoading();
 
     try {
         const url = new URL('/api/search', window.location.origin);
-        url.searchParams.set('q', query);
-        if (artist) {
-            url.searchParams.set('artist', artist);
-        }
+        url.searchParams.set('q', song);
+        if (artist) url.searchParams.set('artist', artist);
         url.searchParams.set('model', selectedModel);
 
         const response = await apiFetch(url.toString());
         const data = await response.json();
 
         if (!response.ok) {
-            throw new Error(data.detail || 'Search failed');
+            throw new Error(data.detail || 'Failed to get recommendations');
         }
 
         const modelName = selectedModel === 'model2' ? 'Model 2 (Audio-Only)' : 'Model 1 (Hybrid)';
-        displayResults(data.results, `Similar to "${query}" [${modelName}]`, data.count);
-        updateRecentSearches(query, artist);
-        elements.autocompleteDropdown().classList.add('hidden');
+        showRecommendationsView(song, artist, data.results, data.count, modelName);
 
     } catch (error) {
-        console.error('Search error:', error);
+        console.error('findSimilarSongs error:', error);
         showToast(error.message, 'error');
-        hideResults();
     } finally {
         hideLoading();
     }
+}
+
+/**
+ * Switch the Search Results section into "recommendations" view:
+ * - Hide the song list + pagination + hint
+ * - Show breadcrumb with Back button
+ * - Show recommendation results below
+ */
+function showRecommendationsView(song, artist, results, count, modelName) {
+    const section = elements.searchResultsSection();
+    if (!section) return;
+
+    // Show breadcrumb
+    const breadcrumb = elements.searchResultsBreadcrumb();
+    if (breadcrumb) breadcrumb.classList.remove('hidden');
+    const crumb = elements.breadcrumbCurrent();
+    if (crumb) crumb.textContent = `"${song}" — ${artist}`;
+
+    // Update header to say "Recommendations"
+    elements.searchResultsTitle().textContent = `Similar to "${song}"`;
+    elements.searchResultsCount().textContent = `${count} recommendation${count !== 1 ? 's' : ''} · ${modelName}`;
+
+    // Clear stats and hide hint
+    const stats = elements.searchResultsStats();
+    if (stats) stats.innerHTML = '';
+    const hint = section.querySelector('.search-results-hint');
+    if (hint) hint.classList.add('hidden');
+
+    // Hide the compact list + pagination
+    const list = elements.searchResultsList();
+    if (list) list.innerHTML = '';
+    const nav = document.getElementById('searchPagination');
+    if (nav) nav.classList.add('hidden');
+
+    // Show recommendations in the main results section
+    displayResults(results, `Similar to "${song}" [${modelName}]`, count);
+
+    // Scroll to results
+    elements.resultsSection().scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/**
+ * Back button handler: return to the search results list at the remembered page.
+ */
+function showSearchResultsView() {
+    // Hide recommendations
+    hideResults();
+
+    const section = elements.searchResultsSection();
+    if (!section) return;
+
+    // Hide breadcrumb
+    const breadcrumb = elements.searchResultsBreadcrumb();
+    if (breadcrumb) breadcrumb.classList.add('hidden');
+
+    // Restore header
+    const query = state.lastSearchQuery;
+    elements.searchResultsTitle().textContent = `Results for "${query}"`;
+    elements.searchResultsCount().textContent =
+        `${state.allSearchResults.length} song${state.allSearchResults.length !== 1 ? 's' : ''}`;
+
+    // Show hint
+    const hint = section.querySelector('.search-results-hint');
+    if (hint) hint.classList.remove('hidden');
+
+    // Re-render the last page the user was on
+    displaySearchPage(state.searchPage);
+    section.classList.remove('hidden');
+
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function searchByMood(mood) {
@@ -717,79 +1058,32 @@ function handleAddToPlaylistClick(event, index) {
 }
 
 // =============================================================================
-// YouTube Player
+// YouTube — open search in new tab (no embed, no modal)
 // =============================================================================
 
-async function playSong(song, artist) {
-    // Show modal with loading state
-    elements.modalSongTitle().textContent = song;
-    elements.modalArtistName().textContent = artist;
-    elements.youtubePlayer().innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #000;">
-            <div class="spinner"></div>
-        </div>
-    `;
-    elements.youtubeModal().classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
+/**
+ * Opens a YouTube search for the given song + artist in a new browser tab.
+ * Uses an anchor element to avoid pop-up blockers.
+ */
+function playSong(song, artist) {
+    const query = encodeURIComponent(`${song} ${artist}`.trim());
+    const url = `https://www.youtube.com/results?search_query=${query}`;
 
-    try {
-        const url = new URL('/api/youtube', window.location.origin);
-        url.searchParams.set('song', song);
-        url.searchParams.set('artist', artist);
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.detail || 'Could not find video');
-        }
-
-        // Check if this is fallback mode (no video_id means it's a search URL)
-        if (!data.video_id || data.video_id === null) {
-            // Fallback mode: Open YouTube search in new tab
-            // Using anchor element instead of window.open() to avoid pop-up blockers
-            const link = document.createElement('a');
-            link.href = data.embed_url;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-
-            // Add to DOM temporarily (required for some browsers)
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            closeModal(); // Close the modal after opening link
-
-            // Show informative message
-            const message = data.message || 'Opening YouTube search in new tab...';
-            showToast(message, 'info');
-            return;
-        }
-
-        // Normal mode: Embed video iframe
-        elements.youtubePlayer().innerHTML = `
-            <iframe 
-                src="${data.embed_url}?autoplay=1" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowfullscreen>
-            </iframe>
-        `;
-
-    } catch (error) {
-        console.error('YouTube error:', error);
-        elements.youtubePlayer().innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: #000; color: white; text-align: center; padding: 20px;">
-                <p style="font-size: 48px; margin-bottom: 16px;">😔</p>
-                <p style="font-size: 16px;">${error.message}</p>
-                <p style="font-size: 14px; margin-top: 8px; color: #888;">Try searching on YouTube directly</p>
-            </div>
-        `;
-    }
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 function closeModal() {
-    elements.youtubeModal().classList.add('hidden');
-    elements.youtubePlayer().innerHTML = '';
+    // Kept for backward-compatibility (modal HTML still in DOM, just never shown now)
+    const modal = elements.youtubeModal();
+    if (modal) modal.classList.add('hidden');
+    const player = elements.youtubePlayer();
+    if (player) player.innerHTML = '';
     document.body.style.overflow = '';
 }
 
