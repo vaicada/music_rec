@@ -98,22 +98,26 @@ class SpotifyClient:
         """Get authorization headers."""
         return {"Authorization": f"Bearer {self._get_token()}"}
     
-    def _get(self, endpoint: str, params: dict = None, _retry: int = 0) -> Dict:
-        """Make authenticated GET request to Spotify API."""
+    def _get(self, endpoint: str, params: dict = None) -> Dict:
+        """Make authenticated GET request to Spotify API.
+
+        On 429 (rate-limit): returns None immediately — NO sleep/retry.
+        The caller (spotify-enrich endpoint) caches the failure for 5 min
+        so subsequent requests hit the cache, not the API.
+        Sleeping here would block the asyncio thread and cause TimeoutError.
+        """
         url = f"{self.BASE_URL}/{endpoint}"
         response = requests.get(url, headers=self._headers(), params=params, timeout=8)
-        
-        if response.status_code == 429 and _retry < 1:
-            # Rate limited - wait once then retry (cap at 5s to avoid blocking async threads)
-            retry_after = min(int(response.headers.get("Retry-After", 3)), 5)
-            print(f"[Spotify] Rate limited. Waiting {retry_after}s (retry {_retry + 1}/1)...")
-            time.sleep(retry_after)
-            return self._get(endpoint, params, _retry=_retry + 1)
-        
+
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After", "?")
+            print(f"[Spotify] Rate limited (429). Retry-After: {retry_after}s — returning None, cache will back-off.")
+            return None
+
         if response.status_code not in (200,):
             print(f"[Spotify] API error: {response.status_code} - {response.text[:200]}")
             return None
-        
+
         return response.json()
     
     # =========================================================================

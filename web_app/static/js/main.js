@@ -878,15 +878,35 @@ function displayResults(results, title, count) {
     });
 
     // Enrich cards with Spotify album art (non-blocking, runs in background)
-    enrichSongCards(results);
+    // Only auto-enrich first 5 songs to reduce API calls; rest are on-demand (hover)
+    enrichSongCards(results, { autoLimit: 5, staggerMs: 600 });
 }
 
 /**
  * Fetch Spotify metadata for each song in results and inject album art + links.
- * Runs asynchronously so cards appear immediately, art loads progressively.
+ *
+ * Strategy to minimise Spotify API usage:
+ *   1. Auto-enrich only the first `autoLimit` cards (default 5) with a
+ *      staggered delay between requests to avoid bursting the rate-limit.
+ *   2. Remaining cards get a hover listener — enrichment fires the first
+ *      time the user mouses-over the card (one-shot, removes itself).
+ *
+ * @param {Array}  results      - Song objects from the API
+ * @param {object} opts
+ * @param {number} opts.autoLimit  - Cards to enrich immediately (default 5)
+ * @param {number} opts.staggerMs  - Delay between sequential auto-enrichments (ms)
  */
-async function enrichSongCards(results) {
-    const enrichPromises = results.map(async (song, index) => {
+async function enrichSongCards(results, { autoLimit = 10, staggerMs = 200 } = {}) {
+    // Track which cards have already been enriched to prevent double-calls
+    const enriched = new Set();
+
+    /**
+     * Core enrichment for a single card. Idempotent — skips if already done.
+     */
+    async function enrichOne(song, index) {
+        if (enriched.has(index)) return;
+        enriched.add(index);
+
         try {
             const url = new URL('/api/spotify-enrich', window.location.origin);
             url.searchParams.set('q', song.song);
@@ -900,14 +920,13 @@ async function enrichSongCards(results) {
             const card = elements.resultsGrid().querySelector(`[data-song-index="${index}"]`);
             if (!card) return;
 
-            // Bug 2 fix: Always show Spotify button — use exact URL if found, search URL as fallback
+            // Always show Spotify button — exact URL if found, search URL as fallback
             const spotifyBtn = card.querySelector('.spotify-link-btn');
             if (spotifyBtn) {
                 const finalSpotifyUrl = data.spotify_url || data.spotify_search_url;
                 if (finalSpotifyUrl) {
                     spotifyBtn.href = finalSpotifyUrl;
                     spotifyBtn.style.display = 'flex';
-                    // Add visual hint that this is a search (not exact) link
                     if (!data.spotify_url && data.spotify_search_url) {
                         spotifyBtn.title = 'Search on Spotify (no exact match found)';
                         spotifyBtn.style.opacity = '0.7';
@@ -966,17 +985,23 @@ async function enrichSongCards(results) {
                     previewContainer.classList.remove('hidden');
                 }
             }
+
             // Store enriched data on card dataset for Add-to-Playlist
             if (data.spotify_url) card.dataset.spotifyUrl = data.spotify_url;
             if (data.album_art) card.dataset.albumArt = data.album_art;
 
         } catch (e) {
             // Silently fail — enrichment is optional
+            enriched.delete(index); // allow retry on next hover
         }
-    });
+    }
 
-    // Run all enrichments in parallel (but don't wait)
-    Promise.allSettled(enrichPromises);
+    // ── Enrich cards with staggered delay to avoid Spotify 429 rate-limit ──
+    // 200ms between each request = 10 cards in ~2s, well within Spotify's limits.
+    // Backend caches results for 24h, so subsequent page loads are instant.
+    for (let i = 0; i < Math.min(results.length, autoLimit); i++) {
+        setTimeout(() => enrichOne(results[i], i), i * staggerMs);
+    }
 }
 
 function formatDuration(ms) {
@@ -1126,6 +1151,9 @@ function hideLoading() {
 
 function hideResults() {
     elements.resultsSection().classList.add('hidden');
+    // Also hide the search results list (Step 1 of Search-First flow)
+    const searchSection = elements.searchResultsSection();
+    if (searchSection) searchSection.classList.add('hidden');
 }
 
 function showToast(message, type = 'info') {

@@ -837,12 +837,105 @@ async def get_by_context(
 
 
 # =============================================================================
+# Spotify Enrich Endpoint — Disk-Persisted Cache
 # =============================================================================
-# Spotify Enrich Endpoint — with in-memory cache (TTL = 1h)
+# Cache sống qua server restart — ghi vào file JSON, load lại khi khởi động.
+# Chỉ persist kết quả found=True (24h TTL).
+# Kết quả thất bại/rate-limit chỉ cache in-memory 60s để retry sớm.
 # =============================================================================
 
-_spotify_cache: dict = {}           # key -> {data, expires_at}
-_SPOTIFY_CACHE_TTL = 3600           # 1 hour in seconds
+import json
+import threading as _threading_cache
+
+_SPOTIFY_CACHE_TTL      = 86400   # 24h  — found=True, ghi disk
+_SPOTIFY_CACHE_TTL_FAIL = 300     # 5min — found=False/timeout, chỉ in-memory (tránh spam khi rate-limit)
+
+
+class SpotifyDiskCache:
+    """
+    Spotify metadata cache với persistence qua JSON file.
+
+    - Load từ disk khi khởi động → không mất cache sau restart.
+    - Ghi disk chỉ khi found=True để tránh lưu lỗi 429/timeout.
+    - Failed lookups vẫn được cache in-memory 60s để tránh spam API.
+    - Thread-safe với threading.Lock (safe ở module-load time, flush là sync I/O).
+    """
+
+    CACHE_FILE = os.path.join(os.path.dirname(__file__), "spotify_cache.json")
+
+    def __init__(self):
+        self._mem: dict = {}          # key -> {data, expires_at}
+        self._lock = _threading_cache.Lock()
+        self._dirty = False           # có entry mới chưa flush
+        self._load_from_disk()
+
+    # ------------------------------------------------------------------
+    # Disk I/O
+    # ------------------------------------------------------------------
+
+    def _load_from_disk(self):
+        """Load cache from JSON file, skipping expired entries."""
+        if not os.path.exists(self.CACHE_FILE):
+            print("[SpotifyCache] No cache file found — starting fresh.")
+            return
+        try:
+            with open(self.CACHE_FILE, "r", encoding="utf-8") as f:
+                raw: dict = json.load(f)
+            now = time.time()
+            loaded = expired = 0
+            for key, entry in raw.items():
+                if entry.get("expires_at", 0) > now:
+                    self._mem[key] = entry
+                    loaded += 1
+                else:
+                    expired += 1
+            print(f"[SpotifyCache] Loaded {loaded} entries from disk "
+                  f"({expired} expired entries discarded).")
+        except Exception as e:
+            print(f"[SpotifyCache] Failed to read cache file: {e}")
+
+    def _flush_to_disk(self):
+        """Write successful entries (found=True) to JSON file, thread-safe."""
+        with self._lock:
+            try:
+                to_save = {
+                    k: v for k, v in self._mem.items()
+                    if v.get("data", {}).get("found") is True
+                }
+                with open(self.CACHE_FILE, "w", encoding="utf-8") as f:
+                    json.dump(to_save, f, ensure_ascii=False, separators=(",", ":"))
+                self._dirty = False
+            except Exception as e:
+                print(f"[SpotifyCache] Failed to write cache: {e}")
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def get(self, key: str) -> Optional[dict]:
+        """Return cached data if still valid, else None."""
+        entry = self._mem.get(key)
+        if entry and entry["expires_at"] > time.time():
+            return entry["data"]
+        return None
+
+    def set(self, key: str, data: dict, ttl: float):
+        """Store in memory. If found=True, also flush to disk."""
+        self._mem[key] = {"data": data, "expires_at": time.time() + ttl}
+        if data.get("found") is True:
+            self._dirty = True
+            self._flush_to_disk()   # sync write — small file (~KB), fast
+
+    def stats(self) -> dict:
+        now = time.time()
+        total = len(self._mem)
+        alive = sum(1 for v in self._mem.values() if v["expires_at"] > now)
+        return {"total_keys": total, "alive_keys": alive,
+                "cache_file": self.CACHE_FILE}
+
+
+# Singleton — initialized once at module load
+_spotify_cache = SpotifyDiskCache()
 
 
 @app.get("/api/spotify-enrich")
@@ -856,11 +949,14 @@ async def spotify_enrich(
     Used by the frontend to enrich song cards with album art after Model 1
     returns recommendations. Makes one Spotify Search API call per song.
 
+    Cache: found=True lưu disk 24h (sống qua restart).
+           found=False chỉ in-memory 60s để retry nhanh sau rate-limit.
+
     Returns:
         { found: bool, album_art, spotify_url, popularity, artist, album }
-        Always includes spotify_search_url as fallback even when found=False.
+        Luôn có spotify_search_url làm fallback dù found=False.
     """
-    # Build Spotify search URL as fallback (always available)
+    # Fallback URL — Spotify search page, luôn có
     _search_q = f"{q} {artist or ''}".strip().replace(" ", "%20")
     _spotify_search_url = f"https://open.spotify.com/search/{_search_q}"
 
@@ -868,51 +964,63 @@ async def spotify_enrich(
         return {"found": False, "reason": "Spotify client not available",
                 "spotify_search_url": _spotify_search_url}
 
-    # Check cache first
+    # ── Cache lookup ──────────────────────────────────────────────────
     cache_key = f"{q.lower()}|{(artist or '').lower()}"
-    now = time.time()
-    if cache_key in _spotify_cache and _spotify_cache[cache_key]["expires_at"] > now:
-        return _spotify_cache[cache_key]["data"]
+    cached = _spotify_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
+    # ── Gọi Spotify API ───────────────────────────────────────────────
+    # NOTE: timeout=5.0 < Spotify retry-after(5s) để fail fast thay vì block.
+    # Khi 429, spotify_client._get() sẽ sleep 5s → vượt timeout → TimeoutError.
+    # Đây là intentional: cache 5 min để không spam API.
     try:
-        # Bug 1 fix: wrap with asyncio.wait_for to prevent indefinite hang
         track = await asyncio.wait_for(
             asyncio.to_thread(spotify_client.search_track, q, artist),
-            timeout=6.0   # 6s max — Spotify's P99 latency is well under this
+            timeout=8.0
         )
+
         if not track:
             result = {"found": False, "reason": "Song not found on Spotify",
                       "spotify_search_url": _spotify_search_url}
-            _spotify_cache[cache_key] = {"data": result, "expires_at": now + _SPOTIFY_CACHE_TTL}
+            _spotify_cache.set(cache_key, result, _SPOTIFY_CACHE_TTL_FAIL)
             return result
 
         result = {
             "found": True,
-            "song": track["name"],
-            "artist": track["artist"],
-            "album": track["album"],
-            "album_art": track["album_art"],
+            "song":        track["name"],
+            "artist":      track["artist"],
+            "album":       track["album"],
+            "album_art":   track["album_art"],
             "spotify_url": track["spotify_url"],
-            "spotify_search_url": _spotify_search_url,   # Always include as fallback
-            "popularity": track["popularity"],
+            "spotify_search_url": _spotify_search_url,
+            "popularity":  track["popularity"],
             "preview_url": track.get("preview_url"),
             "duration_ms": track["duration_ms"],
-            "explicit": track["explicit"],
+            "explicit":    track["explicit"],
         }
-        _spotify_cache[cache_key] = {"data": result, "expires_at": now + _SPOTIFY_CACHE_TTL}
+        _spotify_cache.set(cache_key, result, _SPOTIFY_CACHE_TTL)   # flush disk
         return result
+
     except asyncio.TimeoutError:
-        # Bug 1 fix: timeout — return fallback immediately, don't block frontend
-        print(f"[WARNING] spotify-enrich timeout for: {q} / {artist}")
-        result = {"found": False, "reason": "Spotify API timeout",
+        print(f"[WARNING] spotify-enrich timeout (likely 429 rate-limit): {q} / {artist}")
+        result = {"found": False, "reason": "Spotify API timeout — rate limited, retry in 5 min",
                   "spotify_search_url": _spotify_search_url}
-        # Cache timeout result briefly (30s) to avoid hammering
-        _spotify_cache[cache_key] = {"data": result, "expires_at": now + 30}
+        _spotify_cache.set(cache_key, result, _SPOTIFY_CACHE_TTL_FAIL)
         return result
+
     except Exception as e:
         print(f"[WARNING] spotify-enrich error: {e}")
-        return {"found": False, "reason": str(e),
-                "spotify_search_url": _spotify_search_url}
+        result = {"found": False, "reason": str(e),
+                  "spotify_search_url": _spotify_search_url}
+        _spotify_cache.set(cache_key, result, 30)  # cache lỗi 30s
+        return result
+
+
+@app.get("/api/spotify-cache-stats")
+async def spotify_cache_stats():
+    """Debug endpoint: xem trạng thái Spotify cache."""
+    return _spotify_cache.stats()
 
 
 @app.get("/api/youtube", response_model=YouTubeResult)
