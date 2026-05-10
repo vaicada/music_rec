@@ -161,10 +161,26 @@ class CLIPAudioBridge:
         norm_features = self._normalize(raw_profile)
         query_emb = self._encode(norm_features)   # shape: (1, 32)
 
-        distances, indices = self.faiss_index.search(query_emb, top_k)
+        # Search a larger pool (e.g., top 50) and sample top_k to avoid returning the exact same songs
+        pool_size = min(50, self.faiss_index.ntotal)
+        if pool_size < top_k:
+            pool_size = top_k
+            
+        distances, indices = self.faiss_index.search(query_emb, pool_size)
 
         raw_dists = [float(d) for d, i in zip(distances[0], indices[0]) if i >= 0 and i < len(self.mappings)]
         valid_indices = [int(i) for i in indices[0] if i >= 0 and i < len(self.mappings)]
+        
+        # Zip them together, sample top_k, then sort by distance (lowest distance first)
+        results_pool = list(zip(raw_dists, valid_indices))
+        if len(results_pool) > top_k:
+            import random
+            results_pool = random.sample(results_pool, top_k)
+            results_pool.sort(key=lambda x: x[0])  # Sort by distance
+            
+        raw_dists = [x[0] for x in results_pool]
+        valid_indices = [x[1] for x in results_pool]
+        
         scores = self._relative_scores(raw_dists)
 
         results = []

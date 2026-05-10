@@ -425,6 +425,14 @@ class MusicRecommendationEngine:
         if 'Popularity' in filtered.columns:
             filtered = filtered.sort_values('Popularity', ascending=False)  # type: ignore[call-overload]
             
+        # Add randomness: pick from top 100 instead of always top 10
+        if len(filtered) > top_k:
+            pool_size = min(100, len(filtered))
+            filtered = filtered.head(pool_size).sample(n=top_k)
+            # Re-sort sampled results by popularity
+            if 'Popularity' in filtered.columns:
+                filtered = filtered.sort_values('Popularity', ascending=False)
+            
         song_col, artist_col = self._get_column_names()
         recommendations = []
         for _, row in filtered.head(top_k).iterrows():
@@ -438,8 +446,17 @@ class MusicRecommendationEngine:
 
     def get_recommendations_by_context(self, context: str, top_k: int = 10) -> List[Dict]:
         if self.song_data is None: return []
-        # (Simplified context logic)
-        return self.get_recommendations_by_mood('happy', top_k)
+        
+        context_mapping = {
+            'party': 'energetic',
+            'workout': 'energetic',
+            'study': 'calm',
+            'relax': 'calm',
+            'driving': 'happy'
+        }
+        
+        mood = context_mapping.get(context.lower(), 'happy')
+        return self.get_recommendations_by_mood(mood, top_k)
 
     def build_index(self, data_path: str, save_path: Optional[str] = None) -> None:
         self.load_song_data(data_path)
