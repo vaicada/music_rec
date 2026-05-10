@@ -98,19 +98,19 @@ class SpotifyClient:
         """Get authorization headers."""
         return {"Authorization": f"Bearer {self._get_token()}"}
     
-    def _get(self, endpoint: str, params: dict = None) -> Dict:
+    def _get(self, endpoint: str, params: dict = None, _retry: int = 0) -> Dict:
         """Make authenticated GET request to Spotify API."""
         url = f"{self.BASE_URL}/{endpoint}"
-        response = requests.get(url, headers=self._headers(), params=params, timeout=15)
+        response = requests.get(url, headers=self._headers(), params=params, timeout=8)
         
-        if response.status_code == 429:
-            # Rate limited - wait and retry
-            retry_after = int(response.headers.get("Retry-After", 5))
-            print(f"[Spotify] Rate limited. Waiting {retry_after}s...")
+        if response.status_code == 429 and _retry < 1:
+            # Rate limited - wait once then retry (cap at 5s to avoid blocking async threads)
+            retry_after = min(int(response.headers.get("Retry-After", 3)), 5)
+            print(f"[Spotify] Rate limited. Waiting {retry_after}s (retry {_retry + 1}/1)...")
             time.sleep(retry_after)
-            return self._get(endpoint, params)
+            return self._get(endpoint, params, _retry=_retry + 1)
         
-        if response.status_code != 200:
+        if response.status_code not in (200,):
             print(f"[Spotify] API error: {response.status_code} - {response.text[:200]}")
             return None
         

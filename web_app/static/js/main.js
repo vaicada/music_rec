@@ -709,7 +709,13 @@ async function handleImageUpload() {
         return;
     }
 
-    showLoading();
+    // Bug 3 fix: Show specific loading message for CLIP analysis
+    showLoading('🤖 Analyzing image with AI... (may take up to 30s on first use)');
+
+    // Bug 3 fix: Warn user if taking long (CLIP lazy-loading ~350MB model)
+    const slowTimer = setTimeout(() => {
+        showToast('⏳ AI model is loading for the first time (~350MB). Please wait...', 'warning');
+    }, 8000);
 
     // Hide detected mood container from previous analysis
     if (elements.detectedMoodContainer()) {
@@ -764,6 +770,7 @@ async function handleImageUpload() {
         showToast(error.message, 'error');
         hideResults();
     } finally {
+        clearTimeout(slowTimer);  // Bug 3 fix: cancel slow-load warning
         hideLoading();
     }
 }
@@ -888,11 +895,27 @@ async function enrichSongCards(results) {
             const res = await fetch(url);
             if (!res.ok) return;
             const data = await res.json();
-            if (!data.found) return;
 
             // Find the card by data-index
             const card = elements.resultsGrid().querySelector(`[data-song-index="${index}"]`);
             if (!card) return;
+
+            // Bug 2 fix: Always show Spotify button — use exact URL if found, search URL as fallback
+            const spotifyBtn = card.querySelector('.spotify-link-btn');
+            if (spotifyBtn) {
+                const finalSpotifyUrl = data.spotify_url || data.spotify_search_url;
+                if (finalSpotifyUrl) {
+                    spotifyBtn.href = finalSpotifyUrl;
+                    spotifyBtn.style.display = 'flex';
+                    // Add visual hint that this is a search (not exact) link
+                    if (!data.spotify_url && data.spotify_search_url) {
+                        spotifyBtn.title = 'Search on Spotify (no exact match found)';
+                        spotifyBtn.style.opacity = '0.7';
+                    }
+                }
+            }
+
+            if (!data.found) return; // Skip album art / metadata injection if not found
 
             // Inject album art
             if (data.album_art) {
@@ -900,15 +923,6 @@ async function enrichSongCards(results) {
                 if (placeholder) {
                     placeholder.innerHTML = `<img src="${data.album_art}" alt="${escapeHtml(song.song)} album art" class="album-art-img" loading="lazy">`;
                     placeholder.classList.add('loaded');
-                }
-            }
-
-            // Inject Spotify link
-            if (data.spotify_url) {
-                const spotifyBtn = card.querySelector('.spotify-link-btn');
-                if (spotifyBtn) {
-                    spotifyBtn.href = data.spotify_url;
-                    spotifyBtn.style.display = 'flex';
                 }
             }
 
@@ -1091,15 +1105,23 @@ function closeModal() {
 // UI Helpers
 // =============================================================================
 
-function showLoading() {
+function showLoading(message) {
     state.isLoading = true;
-    elements.loading().classList.remove('hidden');
+    const loadingEl = elements.loading();
+    loadingEl.classList.remove('hidden');
+    // Bug 3 fix: Allow custom loading message (e.g., for CLIP)
+    const msgEl = loadingEl.querySelector('p');
+    if (msgEl) msgEl.textContent = message || 'Finding perfect songs for you...';
     elements.resultsSection().classList.add('hidden');
 }
 
 function hideLoading() {
     state.isLoading = false;
-    elements.loading().classList.add('hidden');
+    const loadingEl = elements.loading();
+    loadingEl.classList.add('hidden');
+    // Reset to default message for next time
+    const msgEl = loadingEl.querySelector('p');
+    if (msgEl) msgEl.textContent = 'Finding perfect songs for you...';
 }
 
 function hideResults() {

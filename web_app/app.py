@@ -40,6 +40,7 @@ import asyncio
 import traceback
 import sys
 import os
+import time
 
 # Load .env file BEFORE any module that reads environment variables (database, auth, etc.)
 try:
@@ -836,8 +837,13 @@ async def get_by_context(
 
 
 # =============================================================================
-# Spotify Enrich Endpoint - returns album art + Spotify metadata for any song
 # =============================================================================
+# Spotify Enrich Endpoint — with in-memory cache (TTL = 1h)
+# =============================================================================
+
+_spotify_cache: dict = {}           # key -> {data, expires_at}
+_SPOTIFY_CACHE_TTL = 3600           # 1 hour in seconds
+
 
 @app.get("/api/spotify-enrich")
 async def spotify_enrich(
@@ -852,30 +858,61 @@ async def spotify_enrich(
 
     Returns:
         { found: bool, album_art, spotify_url, popularity, artist, album }
+        Always includes spotify_search_url as fallback even when found=False.
     """
+    # Build Spotify search URL as fallback (always available)
+    _search_q = f"{q} {artist or ''}".strip().replace(" ", "%20")
+    _spotify_search_url = f"https://open.spotify.com/search/{_search_q}"
+
     if spotify_client is None:
-        return {"found": False, "reason": "Spotify client not available"}
+        return {"found": False, "reason": "Spotify client not available",
+                "spotify_search_url": _spotify_search_url}
+
+    # Check cache first
+    cache_key = f"{q.lower()}|{(artist or '').lower()}"
+    now = time.time()
+    if cache_key in _spotify_cache and _spotify_cache[cache_key]["expires_at"] > now:
+        return _spotify_cache[cache_key]["data"]
 
     try:
-        track = await asyncio.to_thread(spotify_client.search_track, q, artist)
+        # Bug 1 fix: wrap with asyncio.wait_for to prevent indefinite hang
+        track = await asyncio.wait_for(
+            asyncio.to_thread(spotify_client.search_track, q, artist),
+            timeout=6.0   # 6s max — Spotify's P99 latency is well under this
+        )
         if not track:
-            return {"found": False, "reason": "Song not found on Spotify"}
+            result = {"found": False, "reason": "Song not found on Spotify",
+                      "spotify_search_url": _spotify_search_url}
+            _spotify_cache[cache_key] = {"data": result, "expires_at": now + _SPOTIFY_CACHE_TTL}
+            return result
 
-        return {
+        result = {
             "found": True,
             "song": track["name"],
             "artist": track["artist"],
             "album": track["album"],
             "album_art": track["album_art"],
             "spotify_url": track["spotify_url"],
+            "spotify_search_url": _spotify_search_url,   # Always include as fallback
             "popularity": track["popularity"],
             "preview_url": track.get("preview_url"),
             "duration_ms": track["duration_ms"],
             "explicit": track["explicit"],
         }
+        _spotify_cache[cache_key] = {"data": result, "expires_at": now + _SPOTIFY_CACHE_TTL}
+        return result
+    except asyncio.TimeoutError:
+        # Bug 1 fix: timeout — return fallback immediately, don't block frontend
+        print(f"[WARNING] spotify-enrich timeout for: {q} / {artist}")
+        result = {"found": False, "reason": "Spotify API timeout",
+                  "spotify_search_url": _spotify_search_url}
+        # Cache timeout result briefly (30s) to avoid hammering
+        _spotify_cache[cache_key] = {"data": result, "expires_at": now + 30}
+        return result
     except Exception as e:
         print(f"[WARNING] spotify-enrich error: {e}")
-        return {"found": False, "reason": str(e)}
+        return {"found": False, "reason": str(e),
+                "spotify_search_url": _spotify_search_url}
 
 
 @app.get("/api/youtube", response_model=YouTubeResult)
